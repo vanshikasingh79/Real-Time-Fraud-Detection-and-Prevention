@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from app.core.security import verify_api_key
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
 
 
 router = APIRouter()
 
 
-@router.post("/evaluate", response_model=FraudAssessmentResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/evaluate",
+    response_model=FraudAssessmentResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(verify_api_key)],
+)
 async def evaluate_application(
     request: Request,
     application: LoanApplicationRequest,

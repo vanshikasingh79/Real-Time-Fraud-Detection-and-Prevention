@@ -29,6 +29,7 @@ class ExplainabilityEngine:
         risk_score: float,
         risk_level: str,
         risk_factors: list[str],
+        similar_cases: list[dict] | None = None,
     ) -> AIExplanation:
         """Generate a grounded explanation, falling back to deterministic output.
 
@@ -45,21 +46,28 @@ class ExplainabilityEngine:
             risk_score,
             risk_level,
             risk_factors,
+            similar_cases,
         )
 
         try:
+            grounding_factors = list(risk_factors)
+            historical_point = self._historical_context(similar_cases)
+            if historical_point:
+                grounding_factors.append(historical_point)
             provider = self.settings.LLM_PROVIDER.lower()
             if provider == "openai":
                 response_data = await self._generate_openai(prompt)
             elif provider == "bedrock":
                 response_data = await self._generate_bedrock(prompt)
             else:
-                return self._grounded_mock(risk_score, risk_level, risk_factors)
+                return self._grounded_mock(
+                    risk_score, risk_level, risk_factors, similar_cases
+                )
 
             explanation = AIExplanation.model_validate(response_data)
-            return self._with_grounding(explanation, risk_factors)
+            return self._with_grounding(explanation, grounding_factors)
         except Exception:
-            return self._grounded_mock(risk_score, risk_level, risk_factors)
+            return self._grounded_mock(risk_score, risk_level, risk_factors, similar_cases)
 
     def _build_prompt(
         self,
@@ -67,6 +75,7 @@ class ExplainabilityEngine:
         risk_score: float,
         risk_level: str,
         risk_factors: list[str],
+        similar_cases: list[dict] | None,
     ) -> str:
         """Build the strict JSON-only prompt sent to an external provider."""
         schema = {
@@ -80,6 +89,7 @@ class ExplainabilityEngine:
             "risk_level": risk_level,
             "risk_factors": risk_factors,
             "application": sanitized_context,
+            "historical_context": self._historical_context(similar_cases),
         }
         return (
             "You are a fraud risk explainability assistant for compliance officers. "
@@ -165,21 +175,53 @@ class ExplainabilityEngine:
         risk_score: float,
         risk_level: str,
         risk_factors: list[str],
+        similar_cases: list[dict] | None = None,
     ) -> AIExplanation:
         """Create and ground a deterministic fallback explanation."""
         return self._with_grounding(
-            self._mock_explanation(risk_score, risk_level, risk_factors),
-            risk_factors,
+            self._mock_explanation(
+                risk_score,
+                risk_level,
+                risk_factors,
+                similar_cases,
+            ),
+            self._grounding_factors(risk_factors, similar_cases),
         )
+
+    @staticmethod
+    def _historical_context(similar_cases: list[dict] | None) -> str | None:
+        """Build the historical pattern point for prompts and explanations."""
+        if not similar_cases:
+            return None
+        max_similarity = max(case["similarity_score"] for case in similar_cases)
+        case_ids = ", ".join(str(case["application_id"]) for case in similar_cases)
+        return (
+            f"Pattern Match: This application shares an {max_similarity:.0%} feature "
+            f"similarity with past flagged case(s): {case_ids}."
+        )
+
+    @classmethod
+    def _grounding_factors(
+        cls,
+        risk_factors: list[str],
+        similar_cases: list[dict] | None,
+    ) -> list[str]:
+        """Add historical context to the factors used by grounding checks."""
+        historical_point = cls._historical_context(similar_cases)
+        return risk_factors + ([historical_point] if historical_point else [])
 
     @staticmethod
     def _mock_explanation(
         risk_score: float,
         risk_level: str,
         risk_factors: list[str],
+        similar_cases: list[dict] | None = None,
     ) -> AIExplanation:
         """Create a deterministic explanation without external network calls."""
-        factors = risk_factors or ["No specific anomaly was identified"]
+        factors = list(risk_factors) or ["No specific anomaly was identified"]
+        historical_point = ExplainabilityEngine._historical_context(similar_cases)
+        if historical_point:
+            factors.append(historical_point)
         next_steps = (
             ["Approve the application under standard controls"]
             if risk_level.upper() == "LOW"

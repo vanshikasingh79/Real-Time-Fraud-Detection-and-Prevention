@@ -1,0 +1,17 @@
+{
+  "sample_count": 1000,
+  "confusion_matrix": {
+    "true_positive": 150,
+    "false_positive": 0,
+    "true_negative": 850,
+    "false_negative": 0
+  },
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "false_positive_rate": 0.0
+  },
+  "threshold": 0.3,
+  "model_path": "C:\\Users\\vansh\\OneDrive\\Documents\\fraud-detection\\backend\\app\\ml\\artifacts\\saved_model.pkl"
+}

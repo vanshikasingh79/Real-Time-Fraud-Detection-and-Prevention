@@ -15,7 +15,7 @@ from app.main import app
 @pytest.fixture
 def client():
     """Provide a client that runs the application's lifespan hooks."""
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-API-Key": "fg-sk-dev-hackathon-key-2026"}) as test_client:
         yield test_client
 
 

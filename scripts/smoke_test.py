@@ -13,6 +13,7 @@ import httpx
 # Use the IPv4 loopback explicitly: on Windows, ``localhost`` may try an
 # unbound IPv6 loopback first and add seconds to every first request.
 API_URL = "http://127.0.0.1:8000/api/v1/fraud/evaluate?include_explanation=true"
+API_HEADERS = {"X-API-Key": "fg-sk-dev-hackathon-key-2026"}
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,11 @@ def run_scenario(client: httpx.Client, scenario: Scenario) -> list[str]:
     """Execute one scenario and return any validation failures."""
     failures: list[str] = []
     started = time.perf_counter()
-    response = client.post(API_URL, json=payload_for(scenario))
+    response = client.post(
+        API_URL,
+        json=payload_for(scenario),
+        headers=API_HEADERS,
+    )
     elapsed_ms = (time.perf_counter() - started) * 1000
 
     if response.status_code != 200:

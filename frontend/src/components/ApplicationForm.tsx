@@ -1,9 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   CircleDot,
   LoaderCircle,
@@ -15,7 +14,6 @@ import {
 
 import {
   evaluateLoanApplication,
-  type FraudAssessmentResponse,
   type LoanApplicationRequest,
 } from "@/lib/api";
 
@@ -34,10 +32,6 @@ type FormValues = {
   mouseJitter: number;
   sessionDuration: number;
   isVpn: boolean;
-};
-
-type ApplicationFormProps = {
-  onAssessment?: (assessment: FraudAssessmentResponse) => void;
 };
 
 const initialValues: FormValues = {
@@ -88,21 +82,14 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function riskTone(level?: FraudAssessmentResponse["risk_level"]): string {
-  if (level === "HIGH") return "border-red-200 bg-red-50 text-red-800";
-  if (level === "MEDIUM") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-emerald-200 bg-emerald-50 text-emerald-800";
-}
-
-export default function ApplicationForm({ onAssessment }: ApplicationFormProps) {
+export default function ApplicationForm() {
+  const router = useRouter();
   const [values, setValues] = useState<FormValues>(initialValues);
-  const [result, setResult] = useState<FraudAssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function updateValue<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) {
     setValues((currentValues) => ({ ...currentValues, [key]: value }));
-    setResult(null);
     setError(null);
   }
 
@@ -129,8 +116,8 @@ export default function ApplicationForm({ onAssessment }: ApplicationFormProps) 
 
     try {
       const assessment = await evaluateLoanApplication(payload);
-      setResult(assessment);
-      onAssessment?.(assessment);
+      sessionStorage.setItem("latestAssessment", JSON.stringify(assessment));
+      router.push("/assessment");
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -180,11 +167,11 @@ export default function ApplicationForm({ onAssessment }: ApplicationFormProps) 
             </label>
             <label>
               <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Loan amount</span>
-              <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span><input className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 pl-7 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="number" min="1" step="100" value={values.loanAmount} onChange={(event) => updateValue("loanAmount", Number(event.target.value))} required /></div>
+              <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span><input className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 pl-7 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="number" min="1" step="any" value={values.loanAmount} onChange={(event) => updateValue("loanAmount", Number(event.target.value))} required /></div>
             </label>
             <label>
               <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Annual income</span>
-              <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span><input className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 pl-7 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="number" min="1" step="100" value={values.annualIncome} onChange={(event) => updateValue("annualIncome", Number(event.target.value))} required /></div>
+              <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span><input className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 pl-7 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="number" min="1" step="any" value={values.annualIncome} onChange={(event) => updateValue("annualIncome", Number(event.target.value))} required /></div>
             </label>
           </div>
 
@@ -225,11 +212,11 @@ export default function ApplicationForm({ onAssessment }: ApplicationFormProps) 
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Demo scenarios</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">Load a signal profile</h2>
           <div className="mt-4 space-y-2">
-            {presets.map((preset) => <button key={preset.label} type="button" onClick={() => { setValues(preset.values); setResult(null); setError(null); }} className="group flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50"><span><span className="block text-sm font-semibold text-slate-800">{preset.label}</span><span className="mt-0.5 block text-xs text-slate-500">{preset.description}</span></span><ChevronRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" /></button>)}
+            {presets.map((preset) => <button key={preset.label} type="button" onClick={() => { setValues(preset.values); setError(null); }} className="group flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50"><span><span className="block text-sm font-semibold text-slate-800">{preset.label}</span><span className="mt-0.5 block text-xs text-slate-500">{preset.description}</span></span><ChevronRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" /></button>)}
           </div>
         </div>
 
-        {result ? <div className={`rounded-2xl border p-5 ${riskTone(result.risk_level)}`}><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em]">Assessment</p><p className="mt-2 text-3xl font-bold">{result.risk_level}</p></div>{result.risk_level === "LOW" ? <CheckCircle2 className="size-7" /> : <AlertTriangle className="size-7" />}</div><div className="mt-5 border-t border-current/15 pt-4"><div className="flex justify-between text-sm"><span>Risk score</span><strong>{Math.round(result.risk_score * 100)}%</strong></div><p className="mt-2 text-sm font-semibold">{result.recommended_action.replaceAll("_", " ")}</p>{result.explanation && <p className="mt-3 text-sm leading-5 opacity-85">{result.explanation.plain_english_summary}</p>}</div></div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm leading-6 text-slate-500"><CircleDot className="mb-3 size-5 text-blue-600" /><p className="font-semibold text-slate-700">Awaiting assessment</p><p className="mt-1">Your result and grounded explanation will appear here after submission.</p></div>}
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm leading-6 text-slate-500"><CircleDot className="mb-3 size-5 text-blue-600" /><p className="font-semibold text-slate-700">Awaiting assessment</p><p className="mt-1">Submit the application to open its decision and grounded explanation.</p></div>
       </aside>
     </section>
   );

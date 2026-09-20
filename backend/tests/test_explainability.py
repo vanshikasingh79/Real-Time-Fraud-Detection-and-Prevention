@@ -15,7 +15,7 @@ from app.models.schemas import LoanApplicationRequest, TelemetryData
 @pytest.fixture
 def client():
     """Provide a TestClient with FastAPI lifespan enabled."""
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-API-Key": "fg-sk-dev-hackathon-key-2026"}) as test_client:
         yield test_client
 
 

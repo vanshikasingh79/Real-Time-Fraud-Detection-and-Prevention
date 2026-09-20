@@ -1,15 +1,8 @@
-"use client";
-
 import { Activity, LockKeyhole, ShieldCheck } from "lucide-react";
-import { useState } from "react";
 
 import ApplicationForm from "@/components/ApplicationForm";
-import AssessmentResult from "@/components/AssessmentResult";
-import type { FraudAssessmentResponse } from "@/lib/api";
 
 export default function Home() {
-  const [assessment, setAssessment] = useState<FraudAssessmentResponse | null>(null);
-
   return (
     <div className="min-h-screen bg-[#eef3f7] text-slate-900">
       <header className="border-b border-slate-200 bg-[#102332] text-white">
@@ -23,8 +16,7 @@ export default function Home() {
       </header>
       <main className="mx-auto flex max-w-7xl flex-col gap-10 px-5 py-8 sm:px-8 lg:py-12">
         <div className="max-w-3xl"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Analyst workspace</p><h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#102332] sm:text-5xl">Assess every application with signal, context, and control.</h1><p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">Explore behavioral telemetry, run a fraud decision, and review an AI explanation grounded in the model&apos;s observed factors.</p></div>
-        <ApplicationForm onAssessment={setAssessment} />
-        {assessment && <AssessmentResult assessment={assessment} />}
+        <ApplicationForm />
       </main>
     </div>
   );

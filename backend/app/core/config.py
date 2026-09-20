@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     FRAUD_THRESHOLD_HIGH: float = 0.70
     FRAUD_THRESHOLD_MEDIUM: float = 0.30
     MODEL_PATH: str = "app/ml/artifacts/saved_model.pkl"
+    API_KEY: str = "fg-sk-dev-hackathon-key-2026"
     PASTE_COUNT_THRESHOLD: int = 3
     TYPING_WPM_HIGH: float = 150.0
     TYPING_WPM_LOW: float = 10.0
