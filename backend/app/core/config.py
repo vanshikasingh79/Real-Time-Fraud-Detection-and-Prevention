@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     TYPING_WPM_LOW: float = 10.0
     MOUSE_JITTER_LOW: float = 0.05
     LOAN_TO_INCOME_RATIO_HIGH: float = 0.50
-    LLM_PROVIDER: str = "openai"
+    LLM_PROVIDER: str = "mock"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     AWS_REGION: str = "us-east-1"

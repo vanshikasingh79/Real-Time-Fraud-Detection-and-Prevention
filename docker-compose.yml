@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-Fraud Guard API}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      PORT: ${PORT:-8000}
+      FRAUD_THRESHOLD_HIGH: ${FRAUD_THRESHOLD_HIGH:-0.70}
+      FRAUD_THRESHOLD_MEDIUM: ${FRAUD_THRESHOLD_MEDIUM:-0.30}
+      MODEL_PATH: ${MODEL_PATH:-app/ml/artifacts/saved_model.pkl}
+      PASTE_COUNT_THRESHOLD: ${PASTE_COUNT_THRESHOLD:-3}
+      TYPING_WPM_HIGH: ${TYPING_WPM_HIGH:-150.0}
+      TYPING_WPM_LOW: ${TYPING_WPM_LOW:-10.0}
+      MOUSE_JITTER_LOW: ${MOUSE_JITTER_LOW:-0.05}
+      LOAN_TO_INCOME_RATIO_HIGH: ${LOAN_TO_INCOME_RATIO_HIGH:-0.50}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_BEDROCK_MODEL_ID: ${AWS_BEDROCK_MODEL_ID:-anthropic.claude-3-haiku-20240307-v1:0}
+      ENABLE_PII_MASKING: ${ENABLE_PII_MASKING:-True}
+      MAX_EXPLANATION_TOKENS: ${MAX_EXPLANATION_TOKENS:-500}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy

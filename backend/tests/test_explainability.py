@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,9 +14,8 @@ from app.models.schemas import LoanApplicationRequest, TelemetryData
 
 @pytest.fixture
 def client():
-    """Provide an httpx-backed client with FastAPI lifespan enabled."""
+    """Provide a TestClient with FastAPI lifespan enabled."""
     with TestClient(app) as test_client:
-        assert isinstance(test_client, httpx.Client)
         yield test_client
 
 

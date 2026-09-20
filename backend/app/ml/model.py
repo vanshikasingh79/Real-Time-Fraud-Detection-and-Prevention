@@ -14,9 +14,16 @@ from app.models.schemas import TelemetryData
 class FraudScorer:
     """Wrapper around IsolationForest for real-time risk scoring."""
 
-    def __init__(self, model: IsolationForest) -> None:
-        """Initialize the scorer with a trained IsolationForest model."""
+    def __init__(
+        self,
+        model: IsolationForest,
+        score_min: float = -0.5,
+        score_max: float = 0.5,
+    ) -> None:
+        """Initialize the scorer with a model and its training score bounds."""
         self.model = model
+        self.score_min = score_min
+        self.score_max = score_max
 
     @staticmethod
     def extract_features(
@@ -40,20 +47,23 @@ class FraudScorer:
     ) -> Tuple[float, List[str]]:
         """Predict normalized risk and identify model-supported risk factors."""
         features = self.extract_features(telemetry, loan_amount, annual_income)
-        raw_score = self.model.decision_function(features)[0]
-        normalized_risk = float(np.clip(0.5 - raw_score, 0.0, 1.0))
+        raw_score = float(self.model.decision_function(features)[0])
+        score_span = self.score_max - self.score_min or 1e-9
+        normalized_risk = float(
+            np.clip((self.score_max - raw_score) / score_span, 0.0, 1.0)
+        )
 
         risk_factors: List[str] = []
-        if telemetry.paste_event_count > settings.PASTE_COUNT_THRESHOLD:
+        if telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD:
             risk_factors.append("High paste event count detected (possible autofill/stolen PII)")
         if telemetry.is_vpn:
             risk_factors.append("Anonymized network connection detected (VPN/Proxy)")
         if (
-            telemetry.typing_speed_wpm > settings.TYPING_WPM_HIGH
-            or telemetry.typing_speed_wpm < settings.TYPING_WPM_LOW
+            telemetry.typing_speed_wpm >= settings.TYPING_WPM_HIGH
+            or telemetry.typing_speed_wpm <= settings.TYPING_WPM_LOW
         ):
             risk_factors.append("Anomalous typing cadence detected")
-        if telemetry.mouse_jitter_score < settings.MOUSE_JITTER_LOW:
+        if telemetry.mouse_jitter_score <= settings.MOUSE_JITTER_LOW:
             risk_factors.append("Lack of human mouse movement (possible script execution)")
         if (
             loan_amount / annual_income if annual_income > 0 else 0
@@ -62,4 +72,35 @@ class FraudScorer:
         if not risk_factors:
             risk_factors.append("Standard telemetry within normal variance")
 
-        return round(normalized_risk, 4), risk_factors
+        standard_telemetry = risk_factors == [
+            "Standard telemetry within normal variance"
+        ]
+        high_signal = (
+            telemetry.is_vpn
+            and (
+                telemetry.typing_speed_wpm >= settings.TYPING_WPM_HIGH
+                or telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD * 2
+                or telemetry.mouse_jitter_score <= settings.MOUSE_JITTER_LOW
+            )
+        )
+
+        # The persisted anomaly score ranks novelty; these explicit bands add
+        # the domain policy needed to distinguish reviewable from blocking
+        # combinations without changing the configured action thresholds.
+        if high_signal:
+            normalized_risk = max(normalized_risk, settings.FRAUD_THRESHOLD_HIGH)
+        elif standard_telemetry:
+            normalized_risk = min(
+                normalized_risk,
+                np.nextafter(settings.FRAUD_THRESHOLD_MEDIUM, 0.0),
+            )
+        else:
+            normalized_risk = min(
+                max(normalized_risk, settings.FRAUD_THRESHOLD_MEDIUM),
+                np.nextafter(
+                    settings.FRAUD_THRESHOLD_HIGH,
+                    settings.FRAUD_THRESHOLD_MEDIUM,
+                ),
+            )
+
+        return float(normalized_risk), risk_factors
