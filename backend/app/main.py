@@ -9,13 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import router as api_router
 from app.core.config import settings
+from app.services.explainability_service import ExplainabilityEngine
 from app.services.fraud_service import FraudEvaluationService
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
 	"""Load the fraud model once when the application starts."""
-	application.state.fraud_service = FraudEvaluationService()
+	application.state.fraud_service = FraudEvaluationService(
+		explainability_engine=ExplainabilityEngine()
+	)
 	yield
 
 

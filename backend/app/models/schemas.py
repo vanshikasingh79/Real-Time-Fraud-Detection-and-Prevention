@@ -7,7 +7,7 @@ contract for fraud assessment results returned to clients.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,10 +40,10 @@ class AIExplanation(BaseModel):
     plain_english_summary: str = Field(
         ..., description="Concise non-technical explanation for compliance officers"
     )
-    risk_justification_points: List[str] = Field(
+    risk_justification_points: list[str] = Field(
         ..., description="Specific behavioral/financial drivers of the risk score"
     )
-    recommended_next_steps: List[str] = Field(
+    recommended_next_steps: list[str] = Field(
         ..., description="Actionable guidance for fraud analyst review"
     )
     confidence_score: float = Field(..., ge=0.0, le=1.0)
@@ -59,9 +59,9 @@ class FraudAssessmentResponse(BaseModel):
     risk_score: float = Field(..., ge=0.0, le=1.0, description="Normalized fraud risk score between 0 and 1.")
     risk_level: Literal["LOW", "MEDIUM", "HIGH"] = Field(..., description="Aggregated risk category.")
     recommended_action: Literal["APPROVE", "STEP_UP_AUTHENTICATION", "BLOCK"] = Field(..., description="Recommended action based on risk level.")
-    top_risk_factors: List[str] = Field(..., description="Top contributing fraud indicators.")
+    top_risk_factors: list[str] = Field(..., description="Top contributing fraud indicators.")
     evaluated_at: str = Field(..., description="ISO 8601 timestamp for assessment completion.")
-    explanation: Optional[AIExplanation] = None
+    explanation: AIExplanation | None = None
     pii_sanitized: bool = False
 
     @field_validator("evaluated_at")

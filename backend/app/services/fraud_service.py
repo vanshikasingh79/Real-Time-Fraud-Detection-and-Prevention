@@ -11,17 +11,19 @@ import joblib
 from app.core.config import settings
 from app.ml.model import FraudScorer
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
+from app.services.explainability_service import ExplainabilityEngine
 
 
 class FraudEvaluationService:
     """Load the fraud model and evaluate loan applications."""
 
-    def __init__(self) -> None:
+    def __init__(self, explainability_engine: ExplainabilityEngine | None = None) -> None:
         """Load the configured fraud model for subsequent evaluations.
 
         Raises:
             RuntimeError: If the model file is missing, unreadable, or invalid.
         """
+        self.explainability_engine = explainability_engine or ExplainabilityEngine()
         model_path = self._resolve_model_path(settings.MODEL_PATH)
         try:
             loaded_model: Any = joblib.load(model_path)
@@ -44,9 +46,10 @@ class FraudEvaluationService:
         backend_root = Path(__file__).resolve().parents[2]
         return backend_root / path
 
-    def evaluate_application(
+    async def evaluate_application(
         self,
         application: LoanApplicationRequest,
+        include_explanation: bool = True,
     ) -> FraudAssessmentResponse:
         """Evaluate an application and return its validated fraud assessment.
 
@@ -79,6 +82,17 @@ class FraudEvaluationService:
             risk_level = "LOW"
             recommended_action = "APPROVE"
 
+        explanation = None
+        pii_sanitized = False
+        if include_explanation:
+            explanation = await self.explainability_engine.generate_explanation(
+                application=application,
+                risk_score=risk_score,
+                risk_level=risk_level,
+                risk_factors=risk_factors,
+            )
+            pii_sanitized = True
+
         return FraudAssessmentResponse(
             application_id=application.applicant_id,
             risk_score=risk_score,
@@ -86,4 +100,6 @@ class FraudEvaluationService:
             recommended_action=recommended_action,
             top_risk_factors=risk_factors,
             evaluated_at=datetime.now(timezone.utc).isoformat(),
+            explanation=explanation,
+            pii_sanitized=pii_sanitized,
         )

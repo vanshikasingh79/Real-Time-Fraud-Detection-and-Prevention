@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
-from typing import List
 
-from app.models.schemas import AIExplanation, LoanApplicationRequest
+from app.models.schemas import LoanApplicationRequest
 
 
 class AIGuardrailService:
@@ -30,30 +30,41 @@ class AIGuardrailService:
 
     @staticmethod
     def _mask_ip_address(ip_address: str) -> str:
-        """Mask an IPv4 address and fully redact other address formats."""
-        octets = ip_address.split(".")
-        if len(octets) == 4 and all(octet.isdigit() for octet in octets):
+        """Mask the host portion of an IPv4 or IPv6 address."""
+        try:
+            address = ipaddress.ip_address(ip_address)
+        except ValueError:
+            return "ANONYMIZED_IP"
+
+        if address.version == 4:
+            octets = ip_address.split(".")
             return f"{octets[0]}.{octets[1]}.x.x"
-        return "ANONYMIZED_IP"
+
+        hextets = address.exploded.split(":")
+        return ":".join(hextets[:2] + ["x"] * 6)
 
     @staticmethod
     def _mask_device_id(device_id: str) -> str:
-        """Return a stable non-reversible device fingerprint representation."""
-        digest = hashlib.sha256(device_id.encode("utf-8")).hexdigest().upper()
-        return f"DEV-***-{digest[-3:]}"
+        """Return a masked device fingerprint while retaining three characters."""
+        visible_suffix = re.sub(r"[^A-Za-z0-9]", "", device_id)[-3:]
+        if len(visible_suffix) < 3:
+            visible_suffix = hashlib.sha256(device_id.encode("utf-8")).hexdigest()[-3:].upper()
+        return f"DEV-***-{visible_suffix}"
 
-    def verify_grounding(self, explanation: AIExplanation, model_risk_factors: List[str]) -> bool:
-        """Check that each explanation point is supported by model risk factors."""
-        if not explanation.is_grounded or not explanation.risk_justification_points:
-            return False
-        if not model_risk_factors:
+    def verify_grounding(
+        self,
+        explanation_justifications: list[str],
+        model_risk_factors: list[str],
+    ) -> bool:
+        """Check that every explanation point maps to a model risk factor."""
+        if not explanation_justifications or not model_risk_factors:
             return False
         model_terms = {
             term for factor in model_risk_factors for term in self._meaningful_terms(factor)
         }
         return all(
             self._meaningful_terms(point) & model_terms
-            for point in explanation.risk_justification_points
+            for point in explanation_justifications
         )
 
     @classmethod
