@@ -9,7 +9,7 @@ from typing import Any
 import joblib
 
 from app.core.config import settings
-from app.ml.train_model import FraudScorer
+from app.ml.model import FraudScorer
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
 
 

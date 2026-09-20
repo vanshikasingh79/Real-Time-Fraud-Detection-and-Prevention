@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
-client = TestClient(app)
+
+
+@pytest.fixture
+def client():
+    """Provide a client that runs the application's lifespan hooks."""
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def _application_payload(**overrides: Any) -> dict[str, Any]:
@@ -33,7 +40,7 @@ def _application_payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
-def test_health_check() -> None:
+def test_health_check(client: TestClient) -> None:
     """The health endpoint returns a healthy status."""
     response = client.get("/health")
 
@@ -41,7 +48,7 @@ def test_health_check() -> None:
     assert response.json() == {"status": "healthy"}
 
 
-def test_evaluate_low_risk() -> None:
+def test_evaluate_low_risk(client: TestClient) -> None:
     """Normal telemetry produces an approval or step-up decision."""
     response = client.post(
         "/api/v1/fraud/evaluate",
@@ -55,7 +62,7 @@ def test_evaluate_low_risk() -> None:
     }
 
 
-def test_evaluate_high_risk() -> None:
+def test_evaluate_high_risk(client: TestClient) -> None:
     """Extreme telemetry produces a medium or high risk assessment."""
     payload = _application_payload(
         telemetry={
@@ -74,7 +81,7 @@ def test_evaluate_high_risk() -> None:
     assert response.json()["risk_level"] in {"HIGH", "MEDIUM"}
 
 
-def test_invalid_payload() -> None:
+def test_invalid_payload(client: TestClient) -> None:
     """A negative loan amount is rejected by request validation."""
     response = client.post(
         "/api/v1/fraud/evaluate",

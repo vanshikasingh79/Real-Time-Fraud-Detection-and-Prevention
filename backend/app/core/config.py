@@ -20,7 +20,12 @@ class Settings(BaseSettings):
     PORT: int = 8000
     FRAUD_THRESHOLD_HIGH: float = 0.70
     FRAUD_THRESHOLD_MEDIUM: float = 0.30
-    MODEL_PATH: str = "app/ml/saved_model.pkl"
+    MODEL_PATH: str = "app/ml/artifacts/saved_model.pkl"
+    PASTE_COUNT_THRESHOLD: int = 3
+    TYPING_WPM_HIGH: float = 150.0
+    TYPING_WPM_LOW: float = 10.0
+    MOUSE_JITTER_LOW: float = 0.05
+    LOAN_TO_INCOME_RATIO_HIGH: float = 0.50
     LLM_PROVIDER: str = "openai"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"

@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.endpoints import router as fraud_router
+from app.api.v1.router import router as api_router
 from app.core.config import settings
+from app.services.fraud_service import FraudEvaluationService
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+	"""Load the fraud model once when the application starts."""
+	application.state.fraud_service = FraudEvaluationService()
+	yield
 
 
 app = FastAPI(
 	title=settings.APP_NAME,
 	version=settings.VERSION,
+	lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -22,7 +33,7 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
-app.include_router(fraud_router, prefix="/api/v1/fraud")
+app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/health")
