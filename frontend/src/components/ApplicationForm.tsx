@@ -36,6 +36,10 @@ type FormValues = {
   isVpn: boolean;
 };
 
+type ApplicationFormProps = {
+  onAssessment?: (assessment: FraudAssessmentResponse) => void;
+};
+
 const initialValues: FormValues = {
   applicantId: "APP-10294",
   loanAmount: 25000,
@@ -90,7 +94,7 @@ function riskTone(level?: FraudAssessmentResponse["risk_level"]): string {
   return "border-emerald-200 bg-emerald-50 text-emerald-800";
 }
 
-export default function ApplicationForm() {
+export default function ApplicationForm({ onAssessment }: ApplicationFormProps) {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [result, setResult] = useState<FraudAssessmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +128,9 @@ export default function ApplicationForm() {
     };
 
     try {
-      setResult(await evaluateLoanApplication(payload));
+      const assessment = await evaluateLoanApplication(payload);
+      setResult(assessment);
+      onAssessment?.(assessment);
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
