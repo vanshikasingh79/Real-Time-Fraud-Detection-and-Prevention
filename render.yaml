@@ -1,43 +1,54 @@
 services:
-  # 1. FastAPI Backend Service
+  # 1. FastAPI Backend
   - type: web
     name: fraud-detection-backend
     env: python
+    plan: free
     region: singapore
+
     buildCommand: pip install -r backend/requirements.txt
+
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
     healthCheckPath: /api/v1/health
+
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: fraud-postgres-db
           property: connectionString
+
       - key: API_KEY
-        value: fg-sk-prod-live-key-2026
+        sync: false
+
       - key: ALLOWED_ORIGINS
         value: https://fraud-detection-frontend.onrender.com,http://localhost:3000
+
       - key: ENVIRONMENT
         value: production
 
-  # 2. React / Next.js Frontend Service
+  # 2. Next.js Frontend
   - type: web
     name: fraud-detection-frontend
     env: node
+    plan: free
     region: singapore
+
     buildCommand: cd frontend && npm install && npm run build
+
     startCommand: cd frontend && npm run start
+
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: fraud-detection-backend
-          property: url
+        value: https://fraud-detection-backend.onrender.com
+
       - key: NEXT_PUBLIC_API_KEY
-        value: fg-sk-prod-live-key-2026
+        sync: false
 
 databases:
-  # 3. PostgreSQL Managed Database
+  # 3. PostgreSQL
   - name: fraud-postgres-db
+    plan: free
     region: singapore
     databaseName: fraud_detection
     user: fraud_user
