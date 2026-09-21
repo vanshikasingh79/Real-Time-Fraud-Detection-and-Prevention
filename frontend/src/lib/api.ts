@@ -39,8 +39,11 @@ export interface FraudAssessmentResponse {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-const API_KEY =
-  process.env.NEXT_PUBLIC_API_KEY || "fg-sk-dev-hackathon-key-2026";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+const headers = {
+  "Content-Type": "application/json",
+  ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+};
 
 /**
  * Evaluate a loan application through the fraud detection backend.
@@ -57,10 +60,7 @@ export async function evaluateLoanApplication(
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 

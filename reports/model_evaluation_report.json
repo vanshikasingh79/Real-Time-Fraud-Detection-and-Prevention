@@ -1,17 +1,17 @@
 {
   "sample_count": 1000,
   "confusion_matrix": {
-    "true_positive": 150,
-    "false_positive": 0,
-    "true_negative": 850,
-    "false_negative": 0
+    "true_positive": 140,
+    "false_positive": 17,
+    "true_negative": 833,
+    "false_negative": 10
   },
   "metrics": {
-    "precision": 1.0,
-    "recall": 1.0,
-    "f1_score": 1.0,
-    "false_positive_rate": 0.0
+    "precision": 0.89171974522293,
+    "recall": 0.9333333333333333,
+    "f1_score": 0.9120521172638437,
+    "false_positive_rate": 0.02
   },
   "threshold": 0.3,
-  "model_path": "C:\\Users\\vansh\\OneDrive\\Documents\\fraud-detection\\backend\\app\\ml\\artifacts\\saved_model.pkl"
+  "model_path": "backend/app/ml/artifacts/saved_model.pkl"
 }

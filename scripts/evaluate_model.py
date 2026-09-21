@@ -22,14 +22,16 @@ from app.models.schemas import TelemetryData
 SAMPLE_COUNT = 1_000
 LEGITIMATE_COUNT = 850
 FRAUD_COUNT = 150
+LEGITIMATE_BORDERLINE_COUNT = 100
+FRAUD_BORDERLINE_COUNT = 100
 
 
 def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]:
-    """Generate 850 legitimate and 150 labeled fraudulent applications."""
+    """Generate a balanced benchmark with clear and borderline applications."""
     rng = np.random.default_rng(2026)
     samples: list[tuple[TelemetryData, float, float, int]] = []
 
-    for index in range(LEGITIMATE_COUNT):
+    for index in range(LEGITIMATE_COUNT - LEGITIMATE_BORDERLINE_COUNT):
         annual_income = float(rng.uniform(50_000, 160_000))
         loan_amount = float(annual_income * rng.uniform(0.10, 0.45))
         samples.append(
@@ -49,7 +51,27 @@ def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]
             )
         )
 
-    for index in range(FRAUD_COUNT):
+    for index in range(LEGITIMATE_BORDERLINE_COUNT):
+        annual_income = float(rng.uniform(50_000, 160_000))
+        loan_amount = float(annual_income * rng.uniform(0.20, 0.50))
+        samples.append(
+            (
+                TelemetryData(
+                    typing_speed_wpm=float(rng.uniform(100, 120)),
+                    paste_event_count=1,
+                    mouse_jitter_score=float(rng.uniform(0.35, 0.75)),
+                    session_duration_seconds=float(rng.uniform(25, 150)),
+                    ip_address=f"192.168.1.{index + 1}",
+                    device_fingerprint_id=f"LEGIT-EDGE-{index:04d}",
+                    is_vpn=index < 17,
+                ),
+                loan_amount,
+                annual_income,
+                0,
+            )
+        )
+
+    for index in range(FRAUD_COUNT - FRAUD_BORDERLINE_COUNT):
         vector = index % 3
         if vector == 0:
             typing_speed = float(rng.uniform(181, 240))
@@ -86,6 +108,26 @@ def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]
                     is_vpn=is_vpn,
                 ),
                 annual_income * loan_to_income_ratio,
+                annual_income,
+                1,
+            )
+        )
+
+    for index in range(FRAUD_BORDERLINE_COUNT):
+        annual_income = float(rng.uniform(50_000, 160_000))
+        is_vpn = index % 10 != 0
+        samples.append(
+            (
+                TelemetryData(
+                    typing_speed_wpm=float(rng.normal(85, 3)),
+                    paste_event_count=0,
+                    mouse_jitter_score=0.08,
+                    session_duration_seconds=float(rng.uniform(45, 160)),
+                    ip_address=f"10.10.1.{index + 1}",
+                    device_fingerprint_id=f"FRAUD-EDGE-{index:04d}",
+                    is_vpn=is_vpn,
+                ),
+                annual_income * float(rng.uniform(0.30, 0.50)),
                 annual_income,
                 1,
             )
@@ -168,13 +210,13 @@ def main() -> int:
         predictions.append(int(risk_score >= settings.FRAUD_THRESHOLD_MEDIUM))
 
     report = calculate_metrics(labels, predictions)
-    report["model_path"] = str(model_path)
+    report["model_path"] = model_path.relative_to(PROJECT_ROOT).as_posix()
     print_report(report)
 
     report_path = PROJECT_ROOT / "reports" / "model_evaluation_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Report saved to {report_path}")
+    print("Report saved to reports/model_evaluation_report.json")
 
     metrics = report["metrics"]
     assert metrics["false_positive_rate"] <= 0.05, "False Positive Rate exceeded 5%"

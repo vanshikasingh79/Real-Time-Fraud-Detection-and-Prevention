@@ -16,6 +16,7 @@ services:
       TYPING_WPM_LOW: ${TYPING_WPM_LOW:-10.0}
       MOUSE_JITTER_LOW: ${MOUSE_JITTER_LOW:-0.05}
       LOAN_TO_INCOME_RATIO_HIGH: ${LOAN_TO_INCOME_RATIO_HIGH:-0.50}
+      API_KEY: ${API_KEY:-fg-sk-dev-hackathon-key-2026}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
@@ -38,6 +39,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_API_KEY: ${API_KEY:-fg-sk-dev-hackathon-key-2026}
     depends_on:
       backend:
         condition: service_healthy
