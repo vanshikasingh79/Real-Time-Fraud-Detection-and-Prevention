@@ -4,9 +4,6 @@ This module centralizes runtime configuration for the fraud detection API and
 loads values from environment variables and an optional .env file.
 """
 
-import json
-
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,10 +23,7 @@ class Settings(BaseSettings):
     MODEL_PATH: str = "app/ml/artifacts/saved_model.pkl"
     API_KEY: str = ""
     DATABASE_URL: str = "sqlite:///./fraud_audit.db"
-    ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
     PASTE_COUNT_THRESHOLD: int = 3
     TYPING_WPM_HIGH: float = 150.0
     TYPING_WPM_LOW: float = 10.0
@@ -37,6 +31,7 @@ class Settings(BaseSettings):
     LOAN_TO_INCOME_RATIO_HIGH: float = 0.50
     LLM_PROVIDER: str = "mock"
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     AWS_REGION: str = "us-east-1"
     AWS_BEDROCK_MODEL_ID: str = "anthropic.claude-3-haiku-20240307-v1:0"
@@ -47,25 +42,49 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        enable_decoding=False,
         extra="ignore",
     )
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, value: object) -> list[str]:
-        """Accept JSON arrays and comma-separated origin lists from the environment."""
-        if isinstance(value, list):
-            return [str(origin).strip() for origin in value if str(origin).strip()]
-        if isinstance(value, str):
-            try:
-                parsed = json.loads(value)
-            except json.JSONDecodeError:
-                parsed = value.split(",")
-            if isinstance(parsed, list):
-                return [str(origin).strip() for origin in parsed if str(origin).strip()]
-            return [parsed.strip()] if isinstance(parsed, str) and parsed.strip() else []
-        raise ValueError("ALLOWED_ORIGINS must be a JSON array or comma-separated string")
+    @property
+    def async_database_url(self) -> str:
+        """Return a SQLAlchemy URL suitable for asynchronous PostgreSQL access."""
+        from urllib.parse import SplitResult, urlsplit, urlunsplit
+
+        url = self.DATABASE_URL.strip()
+        if not url.startswith("postgresql"):
+            return url
+
+        if "+asyncpg" not in url.split(":", 1)[0]:
+            parts = urlsplit(url)
+            url = urlunsplit(
+                SplitResult(
+                    "postgresql+asyncpg",
+                    parts.netloc,
+                    parts.path,
+                    parts.query,
+                    parts.fragment,
+                )
+            )
+
+        if self.ENVIRONMENT.lower() != "production":
+            parts = urlsplit(url)
+            if parts.hostname == "localhost":
+                credentials = ""
+                if parts.username is not None:
+                    credentials = parts.username
+                    if parts.password is not None:
+                        credentials += f":{parts.password}"
+                    credentials += "@"
+                host = f"{credentials}127.0.0.1"
+                if parts.port is not None:
+                    host += f":{parts.port}"
+                url = urlunsplit(
+                    SplitResult(
+                        parts.scheme, host, parts.path, parts.query, parts.fragment
+                    )
+                )
+
+        return url
 
 
 settings = Settings()

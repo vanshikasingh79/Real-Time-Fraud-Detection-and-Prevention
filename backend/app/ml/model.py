@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 from app.core.config import settings
 from app.models.schemas import TelemetryData
@@ -17,11 +18,13 @@ class FraudScorer:
     def __init__(
         self,
         model: IsolationForest,
+        scaler: StandardScaler,
         score_min: float = -0.5,
         score_max: float = 0.5,
     ) -> None:
         """Initialize the scorer with a model and its training score bounds."""
         self.model = model
+        self.scaler = scaler
         self.score_min = score_min
         self.score_max = score_max
 
@@ -47,10 +50,21 @@ class FraudScorer:
     ) -> Tuple[float, List[str]]:
         """Predict normalized risk and identify model-supported risk factors."""
         features = self.extract_features(telemetry, loan_amount, annual_income)
-        raw_score = float(self.model.decision_function(features)[0])
+        scaled_features = self.scaler.transform(features)
+        raw_score = float(self.model.decision_function(scaled_features)[0])
         score_span = self.score_max - self.score_min or 1e-9
         normalized_risk = float(
             np.clip((self.score_max - raw_score) / score_span, 0.0, 1.0)
+        )
+        print(
+            "FraudScorer.predict_risk:",
+            {
+                "features": features.tolist(),
+                "raw_score": raw_score,
+                "score_min": self.score_min,
+                "score_max": self.score_max,
+                "normalized_risk": normalized_risk,
+            },
         )
 
         risk_factors: List[str] = []
@@ -71,36 +85,5 @@ class FraudScorer:
             risk_factors.append("High loan-to-income ratio request")
         if not risk_factors:
             risk_factors.append("Standard telemetry within normal variance")
-
-        standard_telemetry = risk_factors == [
-            "Standard telemetry within normal variance"
-        ]
-        high_signal = (
-            telemetry.is_vpn
-            and (
-                telemetry.typing_speed_wpm >= settings.TYPING_WPM_HIGH
-                or telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD * 2
-                or telemetry.mouse_jitter_score <= settings.MOUSE_JITTER_LOW
-            )
-        )
-
-        # The persisted anomaly score ranks novelty; these explicit bands add
-        # the domain policy needed to distinguish reviewable from blocking
-        # combinations without changing the configured action thresholds.
-        if high_signal:
-            normalized_risk = max(normalized_risk, settings.FRAUD_THRESHOLD_HIGH)
-        elif standard_telemetry:
-            normalized_risk = min(
-                normalized_risk,
-                np.nextafter(settings.FRAUD_THRESHOLD_MEDIUM, 0.0),
-            )
-        else:
-            normalized_risk = min(
-                max(normalized_risk, settings.FRAUD_THRESHOLD_MEDIUM),
-                np.nextafter(
-                    settings.FRAUD_THRESHOLD_HIGH,
-                    settings.FRAUD_THRESHOLD_MEDIUM,
-                ),
-            )
 
         return float(normalized_risk), risk_factors

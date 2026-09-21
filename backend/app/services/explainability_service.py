@@ -6,6 +6,9 @@ import asyncio
 import json
 from typing import Any
 
+from fastapi import logger
+import logging
+logger = logging.getLogger(__name__)
 from app.core.config import Settings, settings as default_settings
 from app.core.guardrails import AIGuardrailService
 from app.models.schemas import AIExplanation, LoanApplicationRequest
@@ -66,8 +69,9 @@ class ExplainabilityEngine:
 
             explanation = AIExplanation.model_validate(response_data)
             return self._with_grounding(explanation, grounding_factors)
-        except Exception:
-            return self._grounded_mock(risk_score, risk_level, risk_factors, similar_cases)
+        except Exception as exc:
+          logger.exception("llm_explanation_failed", extra={"provider": self.settings.LLM_PROVIDER})
+        return self._grounded_mock(risk_score, risk_level, risk_factors, similar_cases)
 
     def _build_prompt(
         self,
@@ -109,6 +113,7 @@ class ExplainabilityEngine:
 
         client = AsyncOpenAI(
             api_key=self.settings.OPENAI_API_KEY,
+            base_url=self.settings.OPENAI_BASE_URL or None,
             timeout=10.0,
         )
         response = await client.chat.completions.create(
@@ -194,7 +199,9 @@ class ExplainabilityEngine:
         if not similar_cases:
             return None
         max_similarity = max(case["similarity_score"] for case in similar_cases)
-        case_ids = ", ".join(str(case["application_id"]) for case in similar_cases)
+        case_ids = ", ".join(
+            dict.fromkeys(str(case["application_id"]) for case in similar_cases)
+        )
         return (
             f"Pattern Match: This application shares an {max_similarity:.0%} feature "
             f"similarity with past flagged case(s): {case_ids}."

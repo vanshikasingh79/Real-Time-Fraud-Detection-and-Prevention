@@ -7,6 +7,7 @@ import os
 import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 from app.ml.model import FraudScorer
 
@@ -30,14 +31,24 @@ def train_and_save(model_path: str) -> None:
     """Train an IsolationForest model and save a FraudScorer artifact."""
     print("Generating synthetic telemetry dataset...")
     training_data = generate_synthetic_data()
+    scaler = StandardScaler()
+    scaled_training_data = scaler.fit_transform(training_data)
     model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
-    model.fit(training_data)
-    training_scores = model.decision_function(training_data)
+    model.fit(scaled_training_data)
+    training_scores = model.decision_function(scaled_training_data)
     score_min = float(training_scores.min())
     score_max = float(training_scores.max())
 
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    joblib.dump(FraudScorer(model, score_min=score_min, score_max=score_max), model_path)
+    joblib.dump(
+        FraudScorer(
+            model,
+            scaler=scaler,
+            score_min=score_min,
+            score_max=score_max,
+        ),
+        model_path,
+    )
     print(f"Model successfully trained and saved to: {model_path}")
 
 
