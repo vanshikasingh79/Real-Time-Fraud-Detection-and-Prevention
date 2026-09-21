@@ -1,17 +1,17 @@
 {
   "sample_count": 1000,
   "confusion_matrix": {
-    "true_positive": 140,
-    "false_positive": 17,
-    "true_negative": 833,
+    "true_positive": 490,
+    "false_positive": 15,
+    "true_negative": 485,
     "false_negative": 10
   },
   "metrics": {
-    "precision": 0.89171974522293,
-    "recall": 0.9333333333333333,
-    "f1_score": 0.9120521172638437,
-    "false_positive_rate": 0.02
+    "precision": 0.9702970297029703,
+    "recall": 0.98,
+    "f1_score": 0.9751243781094527,
+    "false_positive_rate": 0.03
   },
-  "threshold": 0.3,
+  "threshold": 0.8,
   "model_path": "backend/app/ml/artifacts/saved_model.pkl"
 }

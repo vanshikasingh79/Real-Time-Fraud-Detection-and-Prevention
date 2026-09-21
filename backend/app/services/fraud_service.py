@@ -82,15 +82,18 @@ class FraudEvaluationService:
                 application.loan_amount,
                 application.annual_income,
             ).flatten().tolist()
-            with SessionLocal() as database:
-                repeat_offender = self._is_repeat_offender(
-                    database,
-                    application.telemetry.device_fingerprint_id,
-                )
-                similar_cases = self.vector_engine.find_similar_cases(
-                    database,
-                    feature_vector,
-                )
+            repeat_offender = False
+            similar_cases: list[dict] = []
+            if not application.is_developer_mode:
+                with SessionLocal() as database:
+                    repeat_offender = self._is_repeat_offender(
+                        database,
+                        application.telemetry.device_fingerprint_id,
+                    )
+                    similar_cases = self.vector_engine.find_similar_cases(
+                        database,
+                        feature_vector,
+                    )
             risk_score, risk_factors = self.scorer.predict_risk(
                 telemetry=application.telemetry,
                 loan_amount=application.loan_amount,
@@ -100,9 +103,14 @@ class FraudEvaluationService:
             raise RuntimeError("Unable to evaluate the loan application.") from exc
 
         if repeat_offender:
-            risk_score = max(risk_score, settings.FRAUD_THRESHOLD_HIGH)
+            risk_score = max(risk_score, settings.REPEAT_OFFENDER_RISK_WEIGHT)
             risk_factors.append(
                 "Repeat offender: Device fingerprint previously flagged for high fraud risk"
+            )
+        if application.is_developer_mode:
+            risk_factors.append(
+                "Developer Test Mode Active: Suppressed repeat-offender DB lookup "
+                "and historical vector pattern matching."
             )
 
         if risk_score >= settings.FRAUD_THRESHOLD_HIGH:

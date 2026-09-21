@@ -4,19 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.core.guardrails import AIGuardrailService
-from app.main import app
 from app.models.schemas import LoanApplicationRequest, TelemetryData
-
-
-@pytest.fixture
-def client():
-    """Provide a TestClient with FastAPI lifespan enabled."""
-    with TestClient(app, headers={"X-API-Key": "fg-sk-dev-hackathon-key-2026"}) as test_client:
-        yield test_client
 
 
 def _application() -> LoanApplicationRequest:

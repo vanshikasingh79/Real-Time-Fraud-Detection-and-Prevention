@@ -24,7 +24,8 @@ services:
       APP_NAME: ${APP_NAME:-Fraud Guard API}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       PORT: ${PORT:-8000}
-      FRAUD_THRESHOLD_HIGH: ${FRAUD_THRESHOLD_HIGH:-0.70}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      FRAUD_THRESHOLD_HIGH: ${FRAUD_THRESHOLD_HIGH:-0.80}
       FRAUD_THRESHOLD_MEDIUM: ${FRAUD_THRESHOLD_MEDIUM:-0.30}
       MODEL_PATH: ${MODEL_PATH:-app/ml/artifacts/saved_model.pkl}
       DATABASE_URL: postgresql://frauduser:${POSTGRES_PASSWORD:-fraudpass}@postgres:5432/fraud_audit
@@ -33,6 +34,11 @@ services:
       TYPING_WPM_LOW: ${TYPING_WPM_LOW:-10.0}
       MOUSE_JITTER_LOW: ${MOUSE_JITTER_LOW:-0.05}
       LOAN_TO_INCOME_RATIO_HIGH: ${LOAN_TO_INCOME_RATIO_HIGH:-0.50}
+      EXTREME_FINANCIAL_DTI_RATIO: ${EXTREME_FINANCIAL_DTI_RATIO:-10.0}
+      EXTREME_FINANCIAL_LOAN_AMOUNT: ${EXTREME_FINANCIAL_LOAN_AMOUNT:-20000.0}
+      EXTREME_FINANCIAL_INCOME_LIMIT: ${EXTREME_FINANCIAL_INCOME_LIMIT:-1000.0}
+      EXTREME_FINANCIAL_ANOMALY_WEIGHT: ${EXTREME_FINANCIAL_ANOMALY_WEIGHT:-0.85}
+      REPEAT_OFFENDER_RISK_WEIGHT: ${REPEAT_OFFENDER_RISK_WEIGHT:-0.85}
       API_KEY: ${API_KEY:-fg-sk-dev-hackathon-key-2026}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -45,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -55,8 +61,9 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_API_KEY: ${API_KEY:-fg-sk-dev-hackathon-key-2026}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
       NEXT_PUBLIC_API_KEY: ${API_KEY:-fg-sk-dev-hackathon-key-2026}

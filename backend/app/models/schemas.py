@@ -32,6 +32,10 @@ class LoanApplicationRequest(BaseModel):
     annual_income: float = Field(..., gt=0.0, description="Applicant annual income.")
     requested_term_months: int = Field(..., gt=0, description="Requested repayment term in months.")
     telemetry: TelemetryData = Field(..., description="Behavioral telemetry for the application session.")
+    is_developer_mode: bool = Field(
+        default=False,
+        description="Test mode; suppresses historical repeat-offender and vector matching checks.",
+    )
 
 
 class AIExplanation(BaseModel):

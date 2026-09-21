@@ -16,6 +16,7 @@ export interface LoanApplicationRequest {
   annual_income: number;
   requested_term_months: number;
   telemetry: TelemetryData;
+  is_developer_mode?: boolean;
 }
 
 export interface AIExplanation {

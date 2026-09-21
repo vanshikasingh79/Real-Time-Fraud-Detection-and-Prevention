@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
 
 
@@ -46,7 +47,7 @@ def test_evaluate_with_valid_api_key_succeeds() -> None:
     """Requests with the configured development key are accepted."""
     with TestClient(
         app,
-        headers={"X-API-Key": "fg-sk-dev-hackathon-key-2026"},
+        headers={"X-API-Key": settings.API_KEY},
     ) as client:
         response = client.post("/api/v1/fraud/evaluate", json=PAYLOAD)
 

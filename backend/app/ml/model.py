@@ -56,18 +56,28 @@ class FraudScorer:
         normalized_risk = float(
             np.clip((self.score_max - raw_score) / score_span, 0.0, 1.0)
         )
-        print(
-            "FraudScorer.predict_risk:",
-            {
-                "features": features.tolist(),
-                "raw_score": raw_score,
-                "score_min": self.score_min,
-                "score_max": self.score_max,
-                "normalized_risk": normalized_risk,
-            },
-        )
-
         risk_factors: List[str] = []
+        dti_ratio = loan_amount / max(annual_income, 1.0)
+        extreme_financial_anomaly = (
+            dti_ratio >= settings.EXTREME_FINANCIAL_DTI_RATIO
+            or (
+                loan_amount >= settings.EXTREME_FINANCIAL_LOAN_AMOUNT
+                and annual_income <= settings.EXTREME_FINANCIAL_INCOME_LIMIT
+            )
+        )
+        if extreme_financial_anomaly:
+            normalized_risk = float(
+                np.clip(
+                    normalized_risk + settings.EXTREME_FINANCIAL_ANOMALY_WEIGHT,
+                    0.0,
+                    1.0,
+                )
+            )
+            risk_factors.append(
+                "EXTREME_FINANCIAL_ANOMALY: "
+                f"Unrealistic loan request: Requested loan amount (${loan_amount:,.0f}) "
+                f"severely exceeds reported income (${annual_income:,.0f})."
+            )
         if telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD:
             risk_factors.append("High paste event count detected (possible autofill/stolen PII)")
         if telemetry.is_vpn:

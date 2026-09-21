@@ -8,14 +8,26 @@ import os
 import sys
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 import pytest
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+os.environ.setdefault("API_KEY", "fg-sk-dev-hackathon-key-2026")
+
+from app.core.config import settings
+from app.main import app
 
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture
+def client():
+    """Provide an authenticated TestClient for protected endpoint tests."""
+    with TestClient(app, headers={"X-API-Key": settings.API_KEY}) as test_client:
+        yield test_client
 
 
 @pytest.fixture(scope="session")

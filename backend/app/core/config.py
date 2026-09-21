@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     PORT: int = 8000
-    FRAUD_THRESHOLD_HIGH: float = 0.70
+    FRAUD_THRESHOLD_HIGH: float = 0.80
     FRAUD_THRESHOLD_MEDIUM: float = 0.30
     MODEL_PATH: str = "app/ml/artifacts/saved_model.pkl"
     API_KEY: str = ""
@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     TYPING_WPM_LOW: float = 10.0
     MOUSE_JITTER_LOW: float = 0.05
     LOAN_TO_INCOME_RATIO_HIGH: float = 0.50
+    EXTREME_FINANCIAL_DTI_RATIO: float = 10.0
+    EXTREME_FINANCIAL_LOAN_AMOUNT: float = 20_000.0
+    EXTREME_FINANCIAL_INCOME_LIMIT: float = 1_000.0
+    EXTREME_FINANCIAL_ANOMALY_WEIGHT: float = 0.85
+    REPEAT_OFFENDER_RISK_WEIGHT: float = 0.85
     LLM_PROVIDER: str = "mock"
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = ""

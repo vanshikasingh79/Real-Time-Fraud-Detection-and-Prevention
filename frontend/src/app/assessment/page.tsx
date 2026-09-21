@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 
 import AssessmentResult from "@/components/AssessmentResult";
 import type { FraudAssessmentResponse } from "@/lib/api";
@@ -37,6 +38,14 @@ export default function AssessmentPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onClick={() => router.push("/")} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-400 hover:text-blue-700">
+          <ArrowLeft className="size-4" /> Back to workspace
+        </button>
+        <button type="button" onClick={() => { sessionStorage.removeItem("latestAssessment"); router.push("/"); }} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+          <RotateCcw className="size-4" /> New assessment
+        </button>
+      </div>
       <AssessmentResult assessment={assessment} />
     </main>
   );

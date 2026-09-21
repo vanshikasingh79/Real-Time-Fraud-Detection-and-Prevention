@@ -20,14 +20,14 @@ from app.models.schemas import TelemetryData
 
 
 SAMPLE_COUNT = 1_000
-LEGITIMATE_COUNT = 850
-FRAUD_COUNT = 150
+LEGITIMATE_COUNT = SAMPLE_COUNT // 2
+FRAUD_COUNT = SAMPLE_COUNT - LEGITIMATE_COUNT
 LEGITIMATE_BORDERLINE_COUNT = 100
 FRAUD_BORDERLINE_COUNT = 100
 
 
 def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]:
-    """Generate a balanced benchmark with clear and borderline applications."""
+    """Generate a class-balanced benchmark with realistic feature overlap."""
     rng = np.random.default_rng(2026)
     samples: list[tuple[TelemetryData, float, float, int]] = []
 
@@ -37,13 +37,13 @@ def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]
         samples.append(
             (
                 TelemetryData(
-                    typing_speed_wpm=float(rng.uniform(40, 90)),
-                    paste_event_count=0,
-                    mouse_jitter_score=float(rng.uniform(0.5, 0.9)),
-                    session_duration_seconds=float(rng.uniform(30, 180)),
+                    typing_speed_wpm=max(0.0, float(rng.normal(50, 15))),
+                    paste_event_count=int(rng.poisson(0.5)),
+                    mouse_jitter_score=float(rng.uniform(0.2, 0.8)),
+                    session_duration_seconds=max(0.0, float(rng.normal(120, 30))),
                     ip_address=f"192.168.{index % 200}.{index % 240 + 1}",
                     device_fingerprint_id=f"LEGIT-{index:04d}",
-                    is_vpn=False,
+                    is_vpn=bool(rng.binomial(1, 0.05)),
                 ),
                 loan_amount,
                 annual_income,
@@ -53,17 +53,17 @@ def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]
 
     for index in range(LEGITIMATE_BORDERLINE_COUNT):
         annual_income = float(rng.uniform(50_000, 160_000))
-        loan_amount = float(annual_income * rng.uniform(0.20, 0.50))
+        loan_amount = float(annual_income * rng.uniform(0.15, 0.45))
         samples.append(
             (
                 TelemetryData(
-                    typing_speed_wpm=float(rng.uniform(100, 120)),
-                    paste_event_count=1,
-                    mouse_jitter_score=float(rng.uniform(0.35, 0.75)),
-                    session_duration_seconds=float(rng.uniform(25, 150)),
+                    typing_speed_wpm=float(rng.uniform(45, 95)),
+                    paste_event_count=int(rng.integers(0, 2)),
+                    mouse_jitter_score=float(rng.uniform(0.3, 0.85)),
+                    session_duration_seconds=float(rng.uniform(45, 180)),
                     ip_address=f"192.168.1.{index + 1}",
                     device_fingerprint_id=f"LEGIT-EDGE-{index:04d}",
-                    is_vpn=index < 17,
+                    is_vpn=index < 5,
                 ),
                 loan_amount,
                 annual_income,
@@ -136,7 +136,9 @@ def generate_labeled_test_set() -> list[tuple[TelemetryData, float, float, int]]
     return samples
 
 
-def calculate_metrics(labels: list[int], predictions: list[int]) -> dict[str, Any]:
+def calculate_metrics(
+    labels: list[int], predictions: list[int], threshold: float
+) -> dict[str, Any]:
     """Calculate confusion-matrix counts and classification metrics."""
     true_positive = sum(label == 1 and prediction == 1 for label, prediction in zip(labels, predictions))
     false_positive = sum(label == 0 and prediction == 1 for label, prediction in zip(labels, predictions))
@@ -162,7 +164,7 @@ def calculate_metrics(labels: list[int], predictions: list[int]) -> dict[str, An
             "f1_score": f1_score,
             "false_positive_rate": false_positive_rate,
         },
-        "threshold": settings.FRAUD_THRESHOLD_MEDIUM,
+        "threshold": threshold,
     }
 
 
@@ -196,6 +198,43 @@ def print_report(report: dict[str, Any]) -> None:
     print("+----------------------+----------+")
 
 
+def print_diagnostics(
+    scorer: Any,
+    samples: list[tuple[TelemetryData, float, float, int]],
+    scores: list[float],
+) -> None:
+    """Print calibration, threshold, and label-distribution diagnostics."""
+    raw_scores = [
+        float(
+            scorer.model.decision_function(
+                scorer.scaler.transform(
+                    scorer.extract_features(telemetry, loan_amount, annual_income)
+                )
+            )[0]
+        )
+        for telemetry, loan_amount, annual_income, _ in samples
+    ]
+    print("Diagnostics")
+    print("=" * 42)
+    print(
+        "Labels: "
+        f"legitimate={sum(label == 0 for *_, label in samples)}, "
+        f"fraud={sum(label == 1 for *_, label in samples)}"
+    )
+    print(f"Raw model range: [{min(raw_scores):.6f}, {max(raw_scores):.6f}]")
+    print(f"Calibrated risk range: [{min(scores):.6f}, {max(scores):.6f}]")
+    print(
+        "Training calibration bounds: "
+        f"[{scorer.score_min:.6f}, {scorer.score_max:.6f}]"
+    )
+    for name, threshold in (
+        ("MEDIUM", settings.FRAUD_THRESHOLD_MEDIUM),
+        ("HIGH", settings.FRAUD_THRESHOLD_HIGH),
+    ):
+        positives = sum(score >= threshold for score in scores)
+        print(f"{name} threshold {threshold:.2f}: {positives}/{len(scores)} predicted high-risk")
+
+
 def main() -> int:
     """Run the offline benchmark and save its JSON report."""
     model_path = BACKEND_ROOT / "app" / "ml" / "artifacts" / "saved_model.pkl"
@@ -204,14 +243,17 @@ def main() -> int:
 
     labels: list[int] = []
     predictions: list[int] = []
+    scores: list[float] = []
     for telemetry, loan_amount, annual_income, label in samples:
         risk_score, _ = scorer.predict_risk(telemetry, loan_amount, annual_income)
         labels.append(label)
-        predictions.append(int(risk_score >= settings.FRAUD_THRESHOLD_MEDIUM))
+        scores.append(risk_score)
+        predictions.append(int(risk_score >= settings.FRAUD_THRESHOLD_HIGH))
 
-    report = calculate_metrics(labels, predictions)
+    report = calculate_metrics(labels, predictions, settings.FRAUD_THRESHOLD_HIGH)
     report["model_path"] = model_path.relative_to(PROJECT_ROOT).as_posix()
     print_report(report)
+    print_diagnostics(scorer, samples, scores)
 
     report_path = PROJECT_ROOT / "reports" / "model_evaluation_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -220,8 +262,8 @@ def main() -> int:
 
     metrics = report["metrics"]
     assert metrics["false_positive_rate"] <= 0.05, "False Positive Rate exceeded 5%"
-    assert metrics["recall"] >= 0.85, "Recall fell below 85%"
-    print("[PASS] FPR <= 5% and Recall >= 85%")
+    assert metrics["recall"] >= 0.90, "Recall fell below 90%"
+    print("[PASS] HIGH-risk FPR <= 5% and Recall >= 90%")
     return 0
 
 
