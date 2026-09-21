@@ -3,6 +3,7 @@ services:
   - type: web
     name: fraud-detection-backend
     env: python
+    plan: free
     region: singapore
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -23,6 +24,7 @@ services:
   - type: web
     name: fraud-detection-frontend
     env: node
+    plan: free
     region: singapore
     buildCommand: cd frontend && npm install && npm run build
     startCommand: cd frontend && npm run start
@@ -38,6 +40,7 @@ services:
 databases:
   # 3. PostgreSQL Managed Database
   - name: fraud-postgres-db
+    plan: free
     region: singapore
     databaseName: fraud_detection
     user: fraud_user
