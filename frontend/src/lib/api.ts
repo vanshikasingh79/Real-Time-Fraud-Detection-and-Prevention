@@ -48,12 +48,17 @@ export interface FraudMetrics {
   repeat_offenders_blocked: number;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+const configuredApiUrl =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const normalizedApiUrl = configuredApiUrl.replace(/\/$/, "");
+const API_BASE_URL = normalizedApiUrl.endsWith("/api/v1")
+  ? normalizedApiUrl
+  : `${normalizedApiUrl}/api/v1`;
+const API_KEY =
+  process.env.NEXT_PUBLIC_API_KEY || "fg-sk-dev-hackathon-key-2026";
 const headers = {
   "Content-Type": "application/json",
-  ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+  "X-API-Key": API_KEY,
 };
 
 /**
@@ -95,12 +100,20 @@ export async function evaluateLoanApplication(
 
     return (await response.json()) as FraudAssessmentResponse;
   } catch (error) {
-    if (error instanceof Error && error.message !== "Failed to fetch") {
+    if (error instanceof Error) {
+      if (error.message === "Failed to fetch") {
+        throw new Error(
+          "Unable to reach the fraud detection service. Check that the backend is running and try again.",
+        );
+      }
+      if (error.message === "Invalid or missing API Key") {
+        throw new Error(
+          "The fraud detection service rejected the API key. Check NEXT_PUBLIC_API_KEY.",
+        );
+      }
       throw error;
     }
-    throw new Error(
-      "Unable to connect to the fraud detection service. Please try again.",
-    );
+    throw new Error("Unable to evaluate the application. Please try again.");
   }
 }
 
