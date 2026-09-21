@@ -1,4 +1,4 @@
-"""SQLite database configuration and session dependencies."""
+"""Database configuration and session dependencies."""
 
 from __future__ import annotations
 
@@ -7,12 +7,17 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-DATABASE_URL = "sqlite:///./fraud_audit.db"
+from app.core.config import settings
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
+
+DATABASE_URL = settings.DATABASE_URL
+engine_kwargs = (
+    {"connect_args": {"check_same_thread": False}}
+    if DATABASE_URL.startswith("sqlite")
+    else {}
 )
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 

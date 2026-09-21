@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     FRAUD_THRESHOLD_MEDIUM: float = 0.30
     MODEL_PATH: str = "app/ml/artifacts/saved_model.pkl"
     API_KEY: str = ""
+    DATABASE_URL: str = "sqlite:///./fraud_audit.db"
     PASTE_COUNT_THRESHOLD: int = 3
     TYPING_WPM_HIGH: float = 150.0
     TYPING_WPM_LOW: float = 10.0
