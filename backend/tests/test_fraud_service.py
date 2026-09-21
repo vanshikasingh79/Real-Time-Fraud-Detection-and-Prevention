@@ -41,11 +41,11 @@ def _application_payload(**overrides: Any) -> dict[str, Any]:
 
 
 def test_health_check(client: TestClient) -> None:
-    """The health endpoint returns a healthy status."""
-    response = client.get("/health")
+    """The versioned health endpoint returns runtime diagnostics."""
+    response = client.get("/api/v1/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json()["status"] == "ok"
 
 
 def test_evaluate_low_risk(client: TestClient) -> None:

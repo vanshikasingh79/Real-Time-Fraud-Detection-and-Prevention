@@ -8,11 +8,15 @@ import logging
 import time
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1.router import router as api_router
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db.database import init_db
 from app.services.explainability_service import ExplainabilityEngine
 from app.services.fraud_service import FraudEvaluationService
@@ -36,10 +40,26 @@ app = FastAPI(
 	version=settings.VERSION,
 	lifespan=lifespan,
 )
+app.state.limiter = limiter
+
+
+async def rate_limit_exception_handler(
+	request: Request,
+	exc: RateLimitExceeded,
+) -> JSONResponse:
+	"""Return a consistent JSON response when a client exceeds its limit."""
+	return JSONResponse(
+		status_code=429,
+		content={"detail": "Rate limit exceeded. Please try again later."},
+	)
+
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
 	CORSMiddleware,
-	allow_origins=["http://localhost:3000"],
+	allow_origins=settings.ALLOWED_ORIGINS,
 	allow_credentials=True,
 	allow_methods=["*"],
 	allow_headers=["*"],
@@ -84,9 +104,3 @@ async def log_requests(request, call_next):
 
 
 app.include_router(api_router, prefix="/api/v1")
-
-
-@app.get("/health")
-def health_check() -> dict[str, str]:
-	"""Return the current API health status."""
-	return {"status": "healthy"}

@@ -37,6 +37,17 @@ export interface FraudAssessmentResponse {
   pii_sanitized: boolean;
 }
 
+export interface FraudMetrics {
+  total_evaluations: number;
+  fraud_rate_pct: number;
+  risk_distribution: {
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+  };
+  repeat_offenders_blocked: number;
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
@@ -91,4 +102,12 @@ export async function evaluateLoanApplication(
       "Unable to connect to the fraud detection service. Please try again.",
     );
   }
+}
+
+export async function fetchFraudMetrics(): Promise<FraudMetrics> {
+  const response = await fetch(`${API_BASE_URL}/metrics`, { headers });
+  if (!response.ok) {
+    throw new Error("Unable to load fraud metrics.");
+  }
+  return (await response.json()) as FraudMetrics;
 }

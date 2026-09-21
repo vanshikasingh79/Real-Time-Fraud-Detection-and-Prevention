@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core.security import verify_api_key
+from app.core.rate_limit import limiter
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
 
 
@@ -17,6 +18,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(verify_api_key)],
 )
+@limiter.limit("20/minute")
 async def evaluate_application(
     request: Request,
     application: LoanApplicationRequest,
