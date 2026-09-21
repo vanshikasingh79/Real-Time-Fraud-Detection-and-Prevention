@@ -53,31 +53,39 @@ class FraudScorer:
         scaled_features = self.scaler.transform(features)
         raw_score = float(self.model.decision_function(scaled_features)[0])
         score_span = self.score_max - self.score_min or 1e-9
-        normalized_risk = float(
+        model_risk = float(
             np.clip((self.score_max - raw_score) / score_span, 0.0, 1.0)
         )
-        risk_factors: List[str] = []
-        dti_ratio = loan_amount / max(annual_income, 1.0)
-        extreme_financial_anomaly = (
-            dti_ratio >= settings.EXTREME_FINANCIAL_DTI_RATIO
-            or (
-                loan_amount >= settings.EXTREME_FINANCIAL_LOAN_AMOUNT
-                and annual_income <= settings.EXTREME_FINANCIAL_INCOME_LIMIT
+        lti_ratio = loan_amount / max(annual_income, 1.0)
+        lti_scale = max(settings.LTI_RISK_SCALE, 1e-9)
+        scaled_lti = lti_ratio / lti_scale
+        lti_risk = float(scaled_lti / (1.0 + scaled_lti))
+        telemetry_signals = [
+            telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD,
+            telemetry.is_vpn,
+            telemetry.typing_speed_wpm >= settings.TYPING_WPM_HIGH
+            or telemetry.typing_speed_wpm <= settings.TYPING_WPM_LOW,
+            telemetry.mouse_jitter_score <= settings.MOUSE_JITTER_LOW,
+        ]
+        telemetry_risk = sum(telemetry_signals) / len(telemetry_signals)
+        weight_total = (
+            settings.MODEL_RISK_WEIGHT
+            + settings.LTI_RISK_WEIGHT
+            + settings.TELEMETRY_RISK_WEIGHT
+        ) or 1.0
+        normalized_risk = float(
+            np.clip(
+                (
+                    settings.MODEL_RISK_WEIGHT * model_risk
+                    + settings.LTI_RISK_WEIGHT * lti_risk
+                    + settings.TELEMETRY_RISK_WEIGHT * telemetry_risk
+                )
+                / weight_total,
+                0.0,
+                1.0,
             )
         )
-        if extreme_financial_anomaly:
-            normalized_risk = float(
-                np.clip(
-                    normalized_risk + settings.EXTREME_FINANCIAL_ANOMALY_WEIGHT,
-                    0.0,
-                    1.0,
-                )
-            )
-            risk_factors.append(
-                "EXTREME_FINANCIAL_ANOMALY: "
-                f"Unrealistic loan request: Requested loan amount (${loan_amount:,.0f}) "
-                f"severely exceeds reported income (${annual_income:,.0f})."
-            )
+        risk_factors: List[str] = []
         if telemetry.paste_event_count >= settings.PASTE_COUNT_THRESHOLD:
             risk_factors.append("High paste event count detected (possible autofill/stolen PII)")
         if telemetry.is_vpn:
@@ -89,10 +97,7 @@ class FraudScorer:
             risk_factors.append("Anomalous typing cadence detected")
         if telemetry.mouse_jitter_score <= settings.MOUSE_JITTER_LOW:
             risk_factors.append("Lack of human mouse movement (possible script execution)")
-        if (
-            loan_amount / annual_income if annual_income > 0 else 0
-        ) > settings.LOAN_TO_INCOME_RATIO_HIGH:
-            risk_factors.append("High loan-to-income ratio request")
+        risk_factors.append(f"Loan-to-income ratio is {lti_ratio:.2f}")
         if not risk_factors:
             risk_factors.append("Standard telemetry within normal variance")
 

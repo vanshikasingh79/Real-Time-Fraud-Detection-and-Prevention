@@ -6,3 +6,21 @@ __pycache__/
 *.pyc
 *.pkl
 .env
+.env.*
+!.env.example
+
+# Generated test, coverage, build, and cache files
+.pytest_cache/
+coverage/
+.coverage
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Logs and local OS files
+*.log
+.DS_Store
+
+# The application requires this artifact at startup.
+!backend/app/ml/artifacts/saved_model.pkl

@@ -107,9 +107,9 @@ def test_extreme_financial_anomaly_is_high_without_repeat_history(client: TestCl
     body = response.json()
     assert body["risk_level"] == "HIGH"
     assert body["risk_score"] >= 0.80
-    assert any("EXTREME_FINANCIAL_ANOMALY" in factor for factor in body["top_risk_factors"])
+    assert any("Loan-to-income ratio is" in factor for factor in body["top_risk_factors"])
     assert any(
-        "Requested loan amount ($25,000) severely exceeds reported income ($100)." in point
+        "Loan-to-income ratio is" in point
         for point in body["explanation"]["risk_justification_points"]
     )
 
@@ -137,7 +137,7 @@ def test_legitimate_financial_ratio_remains_low(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["risk_score"] < 0.50
-    assert not any("EXTREME_FINANCIAL_ANOMALY" in factor for factor in body["top_risk_factors"])
+    assert any("Loan-to-income ratio is" in factor for factor in body["top_risk_factors"])
 
 
 def test_developer_mode_suppresses_historical_signals(client: TestClient) -> None:
@@ -164,6 +164,72 @@ def test_developer_mode_suppresses_historical_signals(client: TestClient) -> Non
     assert response.status_code == 200
     body = response.json()
     assert body["risk_level"] == "HIGH"
-    assert any("EXTREME_FINANCIAL_ANOMALY" in factor for factor in body["top_risk_factors"])
-    assert any("Developer Test Mode Active" in factor for factor in body["top_risk_factors"])
+    assert any("Loan-to-income ratio is" in factor for factor in body["top_risk_factors"])
+    assert not any("Repeat offender" in factor for factor in body["top_risk_factors"])
     assert not any("Pattern Match:" in point for point in body["explanation"]["risk_justification_points"])
+
+
+def test_async_evaluation_status_and_analyst_override(client: TestClient) -> None:
+    """Queued evaluations complete and can be overridden by an analyst."""
+    payload = _application_payload(
+        applicant_id="async-review-applicant",
+        user_id="async-review-user",
+        telemetry={
+            "typing_speed_wpm": 200,
+            "paste_event_count": 8,
+            "mouse_jitter_score": 0.0,
+            "session_duration_seconds": 10,
+            "ip_address": "10.20.30.40",
+            "device_id": "async-review-device",
+            "session_id": "async-review-session",
+            "is_vpn": True,
+        },
+    )
+    response = client.post("/api/v1/fraud/evaluate-async", json=payload)
+
+    assert response.status_code == 202
+    tracking_id = response.json()["tracking_id"]
+    status_response = client.get(f"/api/v1/fraud/status/{tracking_id}")
+    assert status_response.status_code == 200
+    status_body = status_response.json()
+    assert status_body["status"] == "COMPLETED"
+    assert status_body["decision"] is not None
+
+    override_response = client.post(
+        "/api/v1/analyst/override",
+        json={
+            "evaluation_id": status_body["evaluation_id"],
+            "analyst_id": "analyst-1",
+            "new_decision": "APPROVED",
+            "reason": "Verified income via bank statements",
+        },
+    )
+    assert override_response.status_code == 200
+    assert override_response.json()["new_decision"] == "APPROVED"
+
+
+def test_velocity_attempts_force_high_risk(client: TestClient) -> None:
+    """The fourth recent matching attempt is blocked by velocity rules."""
+    payload = _application_payload(
+        applicant_id="velocity-applicant",
+        user_id="velocity-user",
+        telemetry={
+            "typing_speed_wpm": 55,
+            "paste_event_count": 0,
+            "mouse_jitter_score": 0.4,
+            "session_duration_seconds": 180,
+            "ip_address": "10.40.50.60",
+            "device_id": "velocity-device",
+            "session_id": "velocity-session",
+            "is_vpn": False,
+        },
+    )
+    responses = [client.post("/api/v1/fraud/evaluate-async", json=payload) for _ in range(4)]
+
+    assert all(response.status_code == 202 for response in responses)
+    final_status = client.get(f"/api/v1/fraud/status/{responses[-1].json()['tracking_id']}")
+    assert final_status.status_code == 200
+    decision = final_status.json()["decision"]
+    assert decision["risk_score"] == 0.90
+    assert decision["risk_level"] == "HIGH"
+    assert "HIGH_VELOCITY_ATTEMPT" in decision["top_risk_factors"]

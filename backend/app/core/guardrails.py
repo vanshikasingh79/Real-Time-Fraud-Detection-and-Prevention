@@ -23,8 +23,8 @@ class AIGuardrailService:
         payload["applicant_id"] = "ANONYMIZED_APPLICANT"
         telemetry = payload["telemetry"]
         telemetry["ip_address"] = self._mask_ip_address(telemetry["ip_address"])
-        telemetry["device_fingerprint_id"] = self._mask_device_id(
-            telemetry["device_fingerprint_id"]
+        telemetry["device_id"] = self._mask_device_id(
+            telemetry["device_id"]
         )
         return payload
 

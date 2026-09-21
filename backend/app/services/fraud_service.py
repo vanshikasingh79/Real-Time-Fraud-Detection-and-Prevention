@@ -9,15 +9,14 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.core.config import settings
 from app.db.database import SessionLocal
-from app.db.models import FraudAuditLog
+from app.db.models import EvaluationLog, FraudAuditLog
 from app.ml.model import FraudScorer
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
 from app.services.explainability_service import ExplainabilityEngine
-from app.services.vector_service import VectorSimilarityEngine
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,6 @@ class FraudEvaluationService:
     def __init__(
         self,
         explainability_engine: ExplainabilityEngine | None = None,
-        vector_engine: VectorSimilarityEngine | None = None,
     ) -> None:
         """Load the configured fraud model for subsequent evaluations.
 
@@ -36,7 +34,6 @@ class FraudEvaluationService:
             RuntimeError: If the model file is missing, unreadable, or invalid.
         """
         self.explainability_engine = explainability_engine or ExplainabilityEngine()
-        self.vector_engine = vector_engine or VectorSimilarityEngine()
         model_path = self._resolve_model_path(settings.MODEL_PATH)
         try:
             loaded_model: Any = joblib.load(model_path)
@@ -82,36 +79,17 @@ class FraudEvaluationService:
                 application.loan_amount,
                 application.annual_income,
             ).flatten().tolist()
-            repeat_offender = False
-            similar_cases: list[dict] = []
-            if not application.is_developer_mode:
-                with SessionLocal() as database:
-                    repeat_offender = self._is_repeat_offender(
-                        database,
-                        application.telemetry.device_fingerprint_id,
-                    )
-                    similar_cases = self.vector_engine.find_similar_cases(
-                        database,
-                        feature_vector,
-                    )
+            velocity_count = self._velocity_count(application)
             risk_score, risk_factors = self.scorer.predict_risk(
                 telemetry=application.telemetry,
                 loan_amount=application.loan_amount,
                 annual_income=application.annual_income,
             )
+            if velocity_count > settings.VELOCITY_MAX_ATTEMPTS:
+                risk_score = 0.90
+                risk_factors.append("HIGH_VELOCITY_ATTEMPT")
         except Exception as exc:
             raise RuntimeError("Unable to evaluate the loan application.") from exc
-
-        if repeat_offender:
-            risk_score = max(risk_score, settings.REPEAT_OFFENDER_RISK_WEIGHT)
-            risk_factors.append(
-                "Repeat offender: Device fingerprint previously flagged for high fraud risk"
-            )
-        if application.is_developer_mode:
-            risk_factors.append(
-                "Developer Test Mode Active: Suppressed repeat-offender DB lookup "
-                "and historical vector pattern matching."
-            )
 
         if risk_score >= settings.FRAUD_THRESHOLD_HIGH:
             risk_level = "HIGH"
@@ -131,7 +109,7 @@ class FraudEvaluationService:
                 risk_score=risk_score,
                 risk_level=risk_level,
                 risk_factors=risk_factors,
-                similar_cases=similar_cases,
+                similar_cases=[],
             )
             pii_sanitized = True
 
@@ -148,25 +126,57 @@ class FraudEvaluationService:
         self._save_audit_log(application, response, feature_vector)
         return response
 
-    @staticmethod
-    def _is_repeat_offender(database: Any, device_fingerprint_id: str) -> bool:
-        """Return whether a device has at least two recent high-risk decisions."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    async def process_evaluation_task(
+        self,
+        tracking_id: str,
+        application: LoanApplicationRequest,
+    ) -> None:
+        """Run a queued evaluation and update its lifecycle record."""
         try:
-            high_risk_count = database.scalar(
-                select(func.count(FraudAuditLog.id)).where(
-                    FraudAuditLog.device_fingerprint_id == device_fingerprint_id,
-                    FraudAuditLog.risk_level == "HIGH",
-                    FraudAuditLog.timestamp >= cutoff,
+            response = await self.evaluate_application(application)
+            with SessionLocal() as database:
+                evaluation = database.scalar(
+                    select(EvaluationLog).where(EvaluationLog.tracking_id == tracking_id)
                 )
-            )
-            return bool(high_risk_count and high_risk_count >= 2)
+                if evaluation is None:
+                    return
+                evaluation.risk_score = response.risk_score
+                evaluation.risk_level = response.risk_level
+                evaluation.status = "COMPLETED"
+                evaluation.decision_payload = response.model_dump_json()
+                database.commit()
         except Exception:
-            logger.exception(
-                "fraud_audit_lookup_failed",
-                extra={"device_fingerprint_id": device_fingerprint_id},
+            logger.exception("background_fraud_evaluation_failed", extra={"tracking_id": tracking_id})
+            with SessionLocal() as database:
+                evaluation = database.scalar(
+                    select(EvaluationLog).where(EvaluationLog.tracking_id == tracking_id)
+                )
+                if evaluation is not None:
+                    evaluation.status = "FAILED"
+                    database.commit()
+
+    @staticmethod
+    def _velocity_count(application: LoanApplicationRequest) -> int:
+        """Count recent attempts sharing an explicit user, device, or IP identifier."""
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            minutes=settings.VELOCITY_WINDOW_MINUTES
+        )
+        user_id = application.user_id or application.applicant_id
+        with SessionLocal() as database:
+            return int(
+                database.scalar(
+                    select(func.count(EvaluationLog.id)).where(
+                        EvaluationLog.created_at >= cutoff,
+                        or_(
+                            EvaluationLog.user_id == user_id,
+                            EvaluationLog.device_id == application.telemetry.device_id,
+                            EvaluationLog.ip_address == application.telemetry.ip_address,
+                        ),
+                    )
+                )
+                or 0
             )
-            return False
+
 
     @staticmethod
     def _save_audit_log(
@@ -181,7 +191,7 @@ class FraudEvaluationService:
                     FraudAuditLog(
                         application_id=response.application_id,
                         applicant_id=application.applicant_id,
-                        device_fingerprint_id=application.telemetry.device_fingerprint_id,
+                        device_fingerprint_id=application.telemetry.device_id,
                         ip_address=application.telemetry.ip_address,
                         risk_score=response.risk_score,
                         risk_level=response.risk_level,

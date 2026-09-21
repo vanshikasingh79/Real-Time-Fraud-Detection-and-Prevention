@@ -6,7 +6,8 @@ export interface TelemetryData {
   mouse_jitter_score: number;
   session_duration_seconds: number;
   ip_address: string;
-  device_fingerprint_id: string;
+  device_id: string;
+  session_id?: string;
   is_vpn: boolean;
 }
 
@@ -16,7 +17,6 @@ export interface LoanApplicationRequest {
   annual_income: number;
   requested_term_months: number;
   telemetry: TelemetryData;
-  is_developer_mode?: boolean;
 }
 
 export interface AIExplanation {
@@ -92,6 +92,21 @@ export async function evaluateLoanApplication(
           typeof errorBody.detail === "string"
         ) {
           detail = errorBody.detail;
+        } else if (
+          typeof errorBody === "object" &&
+          errorBody !== null &&
+          "detail" in errorBody &&
+          Array.isArray(errorBody.detail)
+        ) {
+          const firstError = errorBody.detail[0];
+          if (
+            typeof firstError === "object" &&
+            firstError !== null &&
+            "msg" in firstError &&
+            typeof firstError.msg === "string"
+          ) {
+            detail = `Request validation failed: ${firstError.msg}`;
+          }
         }
       } catch {
         // Keep the friendly fallback when the server response is not JSON.

@@ -23,7 +23,8 @@ def _application() -> LoanApplicationRequest:
             mouse_jitter_score=0.4,
             session_duration_seconds=180,
             ip_address="192.168.1.1",
-            device_fingerprint_id="DEV-99211",
+            device_id="DEV-99211",
+            session_id="session-99211",
             is_vpn=True,
         ),
     )
@@ -40,7 +41,7 @@ def test_pii_sanitization() -> None:
 
     assert sanitized["applicant_id"] == "ANONYMIZED_APPLICANT"
     assert sanitized["telemetry"]["ip_address"] == "192.168.x.x"
-    assert sanitized["telemetry"]["device_fingerprint_id"] == "DEV-***-211"
+    assert sanitized["telemetry"]["device_id"] == "DEV-***-211"
     assert sanitized["loan_amount"] == 25_000
     assert sanitized["annual_income"] == 100_000
     assert sanitized["telemetry"]["typing_speed_wpm"] == 55

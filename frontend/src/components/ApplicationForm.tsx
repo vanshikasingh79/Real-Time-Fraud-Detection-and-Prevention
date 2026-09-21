@@ -87,7 +87,6 @@ export default function ApplicationForm() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [developerMode, setDeveloperMode] = useState(false);
 
   function updateValue<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) {
     setValues((currentValues) => ({ ...currentValues, [key]: value }));
@@ -110,10 +109,10 @@ export default function ApplicationForm() {
         mouse_jitter_score: values.mouseJitter,
         session_duration_seconds: values.sessionDuration,
         ip_address: "192.168.1.1",
-        device_fingerprint_id: "DEV-DEMO-10294",
+        device_id: "DEV-DEMO-10294",
+        session_id: crypto.randomUUID(),
         is_vpn: values.isVpn,
       },
-      is_developer_mode: developerMode,
     };
 
     try {
@@ -200,19 +199,6 @@ export default function ApplicationForm() {
             </div>
             <button type="button" role="switch" aria-checked={values.isVpn} aria-label="Toggle VPN connection" onClick={() => updateValue("isVpn", !values.isVpn)} className={`relative h-7 w-12 rounded-full transition-colors ${values.isVpn ? "bg-amber-500" : "bg-slate-300"}`}><span className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${values.isVpn ? "translate-x-6" : "translate-x-1"}`} /></button>
           </div>
-
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3">
-            <input
-              type="checkbox"
-              checked={developerMode}
-              onChange={(event) => setDeveloperMode(event.target.checked)}
-              className="mt-1 size-4 accent-amber-600"
-            />
-            <span>
-              <span className="block text-sm font-semibold text-amber-900">Developer test mode</span>
-              <span className="mt-1 block text-xs leading-5 text-amber-800">Disables repeat-offender escalation for local testing. Behavioral signals are still scored.</span>
-            </span>
-          </label>
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-xs text-slate-500">Current request</p><p className="font-semibold text-slate-800">{formatCurrency(values.loanAmount)} requested</p></div>
