@@ -67,7 +67,11 @@ class ExplainabilityEngine:
                     risk_score, risk_level, risk_factors, similar_cases
                 )
 
-            explanation = AIExplanation.model_validate(response_data)
+            # Grounding is computed locally after provider validation, so older
+            # provider responses may omit the server-owned field.
+            explanation = AIExplanation.model_validate(
+                {**response_data, "is_grounded": response_data.get("is_grounded", False)}
+            )
             return self._with_grounding(explanation, grounding_factors)
         except Exception as exc:
           logger.exception("llm_explanation_failed", extra={"provider": self.settings.LLM_PROVIDER})

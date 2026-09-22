@@ -16,21 +16,22 @@ import {
   evaluateLoanApplication,
   type LoanApplicationRequest,
 } from "@/lib/api";
+import {
+  useTelemetry,
+  type BrowserTelemetry,
+} from "@/hooks/useTelemetry";
 
 type Preset = {
   label: string;
   description: string;
   values: FormValues;
+  telemetry: BrowserTelemetry;
 };
 
 type FormValues = {
   applicantId: string;
   loanAmount: number;
   annualIncome: number;
-  typingSpeed: number;
-  pasteCount: number;
-  mouseJitter: number;
-  sessionDuration: number;
   isVpn: boolean;
 };
 
@@ -38,11 +39,14 @@ const initialValues: FormValues = {
   applicantId: "APP-10294",
   loanAmount: 25000,
   annualIncome: 100000,
-  typingSpeed: 65,
-  pasteCount: 0,
-  mouseJitter: 0.8,
-  sessionDuration: 45,
   isVpn: false,
+};
+
+const initialSimulationTelemetry: BrowserTelemetry = {
+  typing_speed_wpm: 65,
+  paste_event_count: 0,
+  mouse_jitter_score: 0.8,
+  session_duration_seconds: 45,
 };
 
 const presets: Preset[] = [
@@ -50,16 +54,20 @@ const presets: Preset[] = [
     label: "Legitimate Applicant",
     description: "Natural session, no paste activity",
     values: initialValues,
+    telemetry: initialSimulationTelemetry,
   },
   {
     label: "Bot / Automation Attack",
     description: "Extreme cadence, paste burst, VPN",
     values: {
       ...initialValues,
-      typingSpeed: 200,
-      pasteCount: 8,
-      mouseJitter: 0,
       isVpn: true,
+    },
+    telemetry: {
+      typing_speed_wpm: 200,
+      paste_event_count: 8,
+      mouse_jitter_score: 0,
+      session_duration_seconds: 10,
     },
   },
   {
@@ -67,9 +75,12 @@ const presets: Preset[] = [
     description: "Slow typing with repeated pastes",
     values: {
       ...initialValues,
-      typingSpeed: 10,
-      pasteCount: 4,
-      mouseJitter: 0.45,
+    },
+    telemetry: {
+      typing_speed_wpm: 10,
+      paste_event_count: 4,
+      mouse_jitter_score: 0.45,
+      session_duration_seconds: 45,
     },
   },
 ];
@@ -84,7 +95,12 @@ function formatCurrency(value: number): string {
 
 export default function ApplicationForm() {
   const router = useRouter();
+  const { formRef, telemetry, getTelemetry } = useTelemetry<HTMLFormElement>();
   const [values, setValues] = useState<FormValues>(initialValues);
+  const [telemetryMode, setTelemetryMode] = useState<"real" | "simulation">("real");
+  const [simulationTelemetry, setSimulationTelemetry] = useState<BrowserTelemetry>(
+    initialSimulationTelemetry,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -98,20 +114,21 @@ export default function ApplicationForm() {
     setIsSubmitting(true);
     setError(null);
 
+    const finalTelemetry = telemetryMode === "simulation"
+      ? simulationTelemetry
+      : getTelemetry();
+
     const payload: LoanApplicationRequest = {
       applicant_id: values.applicantId,
       loan_amount: values.loanAmount,
       annual_income: values.annualIncome,
       requested_term_months: 24,
       telemetry: {
-        typing_speed_wpm: values.typingSpeed,
-        paste_event_count: values.pasteCount,
-        mouse_jitter_score: values.mouseJitter,
-        session_duration_seconds: values.sessionDuration,
+        ...finalTelemetry,
         ip_address: "192.168.1.1",
         device_id: "DEV-DEMO-10294",
         session_id: crypto.randomUUID(),
-        is_vpn: values.isVpn,
+        is_vpn: telemetryMode === "simulation" ? values.isVpn : false,
       },
     };
 
@@ -133,6 +150,7 @@ export default function ApplicationForm() {
   return (
     <section className="grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <form
+        ref={formRef}
         onSubmit={handleSubmit}
         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_-34px_rgba(15,23,42,0.35)]"
       >
@@ -180,24 +198,27 @@ export default function ApplicationForm() {
             <div className="mb-4 flex items-end justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Behavioral telemetry</p>
-                <h2 className="text-lg font-semibold text-slate-900">Simulate session signals</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Browser-collected signals</h2>
               </div>
-              <span className="hidden text-xs text-slate-400 sm:block">Drag to adjust</span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${telemetryMode === "simulation" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                {telemetryMode === "simulation" ? "Demo / simulation mode" : "Real telemetry mode"}
+              </span>
             </div>
             <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
-              <SliderField label="Typing speed" value={values.typingSpeed} min={5} max={200} step={1} display={`${values.typingSpeed} WPM`} onChange={(value) => updateValue("typingSpeed", value)} />
-              <SliderField label="Paste events" value={values.pasteCount} min={0} max={10} step={1} display={`${values.pasteCount} events`} onChange={(value) => updateValue("pasteCount", value)} />
-              <SliderField label="Mouse jitter score" value={values.mouseJitter} min={0} max={1} step={0.01} display={values.mouseJitter.toFixed(2)} onChange={(value) => updateValue("mouseJitter", value)} />
-              <SliderField label="Session duration" value={values.sessionDuration} min={5} max={120} step={1} display={`${values.sessionDuration} sec`} onChange={(value) => updateValue("sessionDuration", value)} />
+              <TelemetryValue label="Typing speed" value={`${(telemetryMode === "simulation" ? simulationTelemetry.typing_speed_wpm : telemetry.typing_speed_wpm).toFixed(1)} WPM`} />
+              <TelemetryValue label="Paste events" value={`${telemetryMode === "simulation" ? simulationTelemetry.paste_event_count : telemetry.paste_event_count} events`} />
+              <TelemetryValue label="Mouse jitter score" value={(telemetryMode === "simulation" ? simulationTelemetry.mouse_jitter_score : telemetry.mouse_jitter_score).toFixed(2)} />
+              <TelemetryValue label="Session duration" value={`${(telemetryMode === "simulation" ? simulationTelemetry.session_duration_seconds : telemetry.session_duration_seconds).toFixed(1)} sec`} />
             </div>
+            {telemetryMode === "simulation" && <button type="button" onClick={() => setTelemetryMode("real")} className="mt-5 rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50">Use live browser telemetry</button>}
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="flex items-center gap-3">
               <span className={`flex size-9 items-center justify-center rounded-lg ${values.isVpn ? "bg-amber-100 text-amber-700" : "bg-white text-slate-500"}`}><Wifi className="size-4" /></span>
-              <div><p className="text-sm font-semibold text-slate-800">VPN connection</p><p className="text-xs text-slate-500">Anonymized network detected</p></div>
+              <div><p className="text-sm font-semibold text-slate-800">VPN status (demo only)</p><p className="text-xs text-slate-500">Browser telemetry cannot reliably detect VPN usage</p></div>
             </div>
-            <button type="button" role="switch" aria-checked={values.isVpn} aria-label="Toggle VPN connection" onClick={() => updateValue("isVpn", !values.isVpn)} className={`relative h-7 w-12 rounded-full transition-colors ${values.isVpn ? "bg-amber-500" : "bg-slate-300"}`}><span className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${values.isVpn ? "translate-x-6" : "translate-x-1"}`} /></button>
+            <button type="button" role="switch" aria-checked={values.isVpn} aria-label="Toggle demo VPN status" disabled={telemetryMode !== "simulation"} onClick={() => updateValue("isVpn", !values.isVpn)} className={`relative h-7 w-12 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${values.isVpn ? "bg-amber-500" : "bg-slate-300"}`}><span className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${values.isVpn ? "translate-x-6" : "translate-x-1"}`} /></button>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -213,7 +234,7 @@ export default function ApplicationForm() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Demo scenarios</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">Load a signal profile</h2>
           <div className="mt-4 space-y-2">
-            {presets.map((preset) => <button key={preset.label} type="button" onClick={() => { setValues(preset.values); setError(null); }} className="group flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50"><span><span className="block text-sm font-semibold text-slate-800">{preset.label}</span><span className="mt-0.5 block text-xs text-slate-500">{preset.description}</span></span><ChevronRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" /></button>)}
+            {presets.map((preset) => <button key={preset.label} type="button" onClick={() => { setValues(preset.values); setSimulationTelemetry(preset.telemetry); setTelemetryMode("simulation"); setError(null); }} className="group flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50"><span><span className="block text-sm font-semibold text-slate-800">{preset.label}</span><span className="mt-0.5 block text-xs text-slate-500">{preset.description}</span></span><ChevronRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" /></button>)}
           </div>
         </div>
 
@@ -223,6 +244,6 @@ export default function ApplicationForm() {
   );
 }
 
-function SliderField({ label, value, min, max, step, display, onChange }: { label: string; value: number; min: number; max: number; step: number; display: string; onChange: (value: number) => void }) {
-  return <label className="block"><span className="mb-2 flex items-center justify-between text-sm font-medium text-slate-700"><span>{label}</span><strong className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700">{display}</strong></span><input className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-600" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+function TelemetryValue({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"><p className="text-xs font-bold uppercase tracking-widest text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold text-slate-900">{value}</p></div>;
 }

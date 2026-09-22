@@ -57,7 +57,9 @@ async def _wait_for_database_ready() -> None:
         return
 
     try:
-        import asyncpg
+        from importlib import import_module
+
+        asyncpg = import_module("asyncpg")
     except ImportError as exc:
         raise RuntimeError(
             "PostgreSQL tests require the asyncpg package to be installed."

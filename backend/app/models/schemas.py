@@ -11,7 +11,10 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
-
+class ExplanationResponse(BaseModel):
+    summary: str
+    risk_factors: list[str]
+    is_grounded: bool = True  # Add default fallback value here
 class TelemetryData(BaseModel):
     """Behavioral telemetry captured during a lending application session."""
 
