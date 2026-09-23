@@ -134,6 +134,9 @@ export default function ApplicationForm() {
 
     try {
       const assessment = await evaluateLoanApplication(payload);
+      if (assessment.risk_score > 0.8 || assessment.recommended_action === "BLOCK" || assessment.recommended_action === "BLOCKED") {
+        window.dispatchEvent(new Event("fg-repeat-blocked"));
+      }
       sessionStorage.setItem("latestAssessment", JSON.stringify(assessment));
       router.push("/assessment");
     } catch (submissionError) {

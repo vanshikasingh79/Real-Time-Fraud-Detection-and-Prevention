@@ -13,10 +13,25 @@ const metricCards = [
 
 export default function MetricsDashboard() {
   const [metrics, setMetrics] = useState<FraudMetrics | null>(null);
+  const [localRepeatBlocked, setLocalRepeatBlocked] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const storedCount = Number.parseInt(localStorage.getItem("fg_repeat_blocked") ?? "0", 10);
+    return Number.isNaN(storedCount) ? 0 : storedCount;
+  });
 
   useEffect(() => {
+    function handleRepeatBlocked() {
+      const nextCount = Number.parseInt(localStorage.getItem("fg_repeat_blocked") ?? "0", 10) + 1;
+      localStorage.setItem("fg_repeat_blocked", String(nextCount));
+      setLocalRepeatBlocked(nextCount);
+    }
+
+    window.addEventListener("fg-repeat-blocked", handleRepeatBlocked);
     fetchFraudMetrics().then(setMetrics).catch(() => setMetrics(null));
+    return () => window.removeEventListener("fg-repeat-blocked", handleRepeatBlocked);
   }, []);
+
+  const repeatOffendersBlocked = metrics?.repeat_offenders_blocked || localRepeatBlocked;
 
   return (
     <section aria-label="Fraud metrics" className="w-full max-w-6xl">
@@ -32,7 +47,15 @@ export default function MetricsDashboard() {
             <Icon className="size-5 text-blue-600" />
             <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
             <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              {metrics ? (key === "fraud_rate_pct" ? `${metrics[key].toFixed(1)}%` : metrics[key].toLocaleString()) : "--"}
+              {metrics
+                ? key === "fraud_rate_pct"
+                  ? `${metrics[key].toFixed(1)}%`
+                  : key === "repeat_offenders_blocked"
+                    ? repeatOffendersBlocked.toLocaleString()
+                    : metrics[key].toLocaleString()
+                : key === "repeat_offenders_blocked"
+                  ? repeatOffendersBlocked.toLocaleString()
+                  : "--"}
             </p>
           </div>
         ))}

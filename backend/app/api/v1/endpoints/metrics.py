@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.db.database import SessionLocal
-from app.db.models import FraudAuditLog
+from app.db.models import AuditLog, FraudAuditLog
 
 
 router = APIRouter()
@@ -34,8 +34,14 @@ def get_metrics() -> dict[str, int | float | dict[str, int]]:
 		}
 		repeat_offenders_blocked = database.scalar(
 			select(func.count())
-			.select_from(FraudAuditLog)
-			.where(FraudAuditLog.risk_factors.like("%Repeat offender%"))
+			.select_from(AuditLog)
+			.where(
+				or_(
+					func.upper(AuditLog.new_decision) == "BLOCKED",
+					func.lower(AuditLog.reason).contains("velocity"),
+					func.lower(AuditLog.reason).contains("repeat"),
+				)
+			)
 		) or 0
 
 	return {

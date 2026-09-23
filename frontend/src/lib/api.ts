@@ -31,7 +31,7 @@ export interface FraudAssessmentResponse {
   application_id: string;
   risk_score: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH";
-  recommended_action: "APPROVE" | "STEP_UP_AUTHENTICATION" | "BLOCK";
+  recommended_action: "APPROVE" | "STEP_UP_AUTHENTICATION" | "BLOCK" | "BLOCKED";
   top_risk_factors: string[];
   evaluated_at: string;
   explanation: AIExplanation | null;
