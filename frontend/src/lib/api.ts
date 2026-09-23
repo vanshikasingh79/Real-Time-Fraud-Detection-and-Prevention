@@ -35,6 +35,12 @@ export interface FraudAssessmentResponse {
   top_risk_factors: string[];
   evaluated_at: string;
   explanation: AIExplanation | null;
+  similar_cases: Array<{
+    application_id: string;
+    risk_level: "LOW" | "MEDIUM" | "HIGH";
+    risk_factors: string[];
+    similarity_score: number;
+  }> | null;
   pii_sanitized: boolean;
 }
 

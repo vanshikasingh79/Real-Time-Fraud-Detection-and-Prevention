@@ -17,6 +17,7 @@ from app.db.models import EvaluationLog, FraudAuditLog
 from app.ml.model import FraudScorer
 from app.models.schemas import FraudAssessmentResponse, LoanApplicationRequest
 from app.services.explainability_service import ExplainabilityEngine
+from app.services.vector_service import VectorSimilarityEngine
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +104,20 @@ class FraudEvaluationService:
 
         explanation = None
         pii_sanitized = False
+        similar_cases = []
+        if not application.is_developer_mode:
+            with SessionLocal() as database:
+                similar_cases = VectorSimilarityEngine().find_similar_cases(
+                    database,
+                    feature_vector,
+                )
         if include_explanation:
             explanation = await self.explainability_engine.generate_explanation(
                 application=application,
                 risk_score=risk_score,
                 risk_level=risk_level,
                 risk_factors=risk_factors,
-                similar_cases=[],
+                similar_cases=similar_cases,
             )
             pii_sanitized = True
 
@@ -121,6 +129,7 @@ class FraudEvaluationService:
             top_risk_factors=risk_factors,
             evaluated_at=datetime.now(timezone.utc).isoformat(),
             explanation=explanation,
+            similar_cases=similar_cases or None,
             pii_sanitized=pii_sanitized,
         )
         self._save_audit_log(application, response, feature_vector)

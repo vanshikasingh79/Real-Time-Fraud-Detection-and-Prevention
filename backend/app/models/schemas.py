@@ -80,6 +80,10 @@ class FraudAssessmentResponse(BaseModel):
     top_risk_factors: list[str] = Field(..., description="Top contributing fraud indicators.")
     evaluated_at: str = Field(..., description="ISO 8601 timestamp for assessment completion.")
     explanation: AIExplanation | None = None
+    similar_cases: list[dict] | None = Field(
+        default=None,
+        description="Historically similar flagged cases used for explainability.",
+    )
     pii_sanitized: bool = False
 
     @field_validator("evaluated_at")

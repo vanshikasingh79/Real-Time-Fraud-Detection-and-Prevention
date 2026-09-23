@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
   Check,
   CheckCircle2,
   CircleHelp,
+  ClipboardCheck,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -57,9 +59,34 @@ function scoreBarColor(level: FraudAssessmentResponse["risk_level"]): string {
 }
 
 export default function AssessmentResult({ assessment }: AssessmentResultProps) {
+  const [analystNote, setAnalystNote] = useState("");
+  const [loggedDecision, setLoggedDecision] = useState<{
+    status: "APPROVED" | "REJECTED" | "FALSE_POSITIVE";
+    timestamp: string;
+    note: string;
+  } | null>(null);
   const risk = getRiskPresentation(assessment.risk_level);
   const RiskIcon = risk.icon;
   const scorePercent = Math.max(0, Math.min(1, assessment.risk_score)) * 100;
+
+  function logDecision(status: "APPROVED" | "REJECTED" | "FALSE_POSITIVE") {
+    const override = {
+      application_id: assessment.application_id,
+      status,
+      timestamp: new Date().toISOString(),
+      note: analystNote.trim(),
+    };
+    try {
+      const stored = JSON.parse(localStorage.getItem("fg_analyst_overrides") ?? "[]");
+      localStorage.setItem(
+        "fg_analyst_overrides",
+        JSON.stringify(Array.isArray(stored) ? [...stored, override] : [override]),
+      );
+    } catch {
+      localStorage.setItem("fg_analyst_overrides", JSON.stringify([override]));
+    }
+    setLoggedDecision(override);
+  }
 
   return (
     <section aria-label="Fraud assessment result" className="w-full max-w-5xl space-y-5">
@@ -108,6 +135,53 @@ export default function AssessmentResult({ assessment }: AssessmentResultProps) 
           {assessment.explanation ? <div className="mt-5 space-y-5"><div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4"><p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Executive summary</p><p className="mt-2 text-sm leading-6 text-slate-700">{assessment.explanation.plain_english_summary}</p></div><ExplanationList title="Why this was flagged" items={assessment.explanation.risk_justification_points} /><ExplanationList title="Recommended next steps" items={assessment.explanation.recommended_next_steps} /></div> : <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm leading-6 text-slate-500">No AI explanation was requested for this assessment.</div>}
         </div>
       </div>
+
+      {assessment.similar_cases && assessment.similar_cases.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="similar-cases-heading">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="size-5 text-blue-600" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Historical context</p>
+              <h3 id="similar-cases-heading" className="mt-1 text-lg font-semibold text-slate-900">Similar Historical Cases</h3>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {assessment.similar_cases.map((similarCase) => (
+              <div key={similarCase.application_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="truncate text-sm font-semibold text-slate-900">{similarCase.application_id}</p>
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Similarity</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-slate-800">{Math.round(similarCase.similarity_score * 100)}%</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Human-in-the-Loop (HITL) MLOps Feedback Loop */}
+      <section className="rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-sm sm:p-6" aria-labelledby="analyst-decision-heading">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Analyst review</p>
+            <h3 id="analyst-decision-heading" className="mt-1 text-lg font-semibold">Analyst Decision &amp; Human-in-the-Loop Override</h3>
+          </div>
+          <ClipboardCheck className="size-5 shrink-0 text-slate-400" />
+        </div>
+        <label className="mt-5 block text-sm font-medium text-slate-300" htmlFor="analyst-notes">Analyst Notes / Justification</label>
+        <textarea id="analyst-notes" value={analystNote} onChange={(event) => setAnalystNote(event.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30" placeholder="Add context for this decision (optional)" />
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => logDecision("APPROVED")} className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-400">Approve Application</button>
+          <button type="button" onClick={() => logDecision("REJECTED")} className="rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-400">Reject Application</button>
+          <button type="button" onClick={() => logDecision("FALSE_POSITIVE")} className="rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Mark False Positive</button>
+        </div>
+        {loggedDecision && (
+          <div className="mt-5 rounded-xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-sm" role="status">
+            <p className="font-bold text-emerald-300">Decision Logged</p>
+            <p className="mt-2 text-slate-300">Status: <span className="font-semibold text-white">{loggedDecision.status}</span></p>
+            <p className="mt-1 text-slate-300">Timestamp: <span className="font-mono text-xs text-white">{loggedDecision.timestamp}</span></p>
+            <p className="mt-1 text-slate-300">Recorded Analyst Note: <span className="text-white">{loggedDecision.note || "None"}</span></p>
+          </div>
+        )}
+      </section>
 
       <footer className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Compliance controls</p><p className="mt-1 text-xs text-slate-500">Application {assessment.application_id} · {new Date(assessment.evaluated_at).toLocaleString()}</p></div>
